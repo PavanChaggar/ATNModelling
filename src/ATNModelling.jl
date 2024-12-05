@@ -12,7 +12,7 @@ using LsqFit
 include("data-utils.jl")
 include("parcellation-utils.jl")
 
-using .DataUtils: baseline_difference
+using .DataUtils
 using .ParcellationUtils
 
 end
