@@ -1,2 +1,9 @@
-/Manifest.toml
+Manifest.toml
 test
+
+data
+output/plots
+
+py-analysis/env
+py-analysis/roi-data
+py-analysis/*.ipynb

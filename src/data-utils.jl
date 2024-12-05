@@ -1,0 +1,186 @@
+module DataUtils
+
+using ADNIDatasets: ADNIDataset, calc_suvr, get_times, get_id, get_initial_conditions
+using Statistics: mean
+using Polynomials: fit, roots
+using NonlinearSolve: NonlinearProblem, solve, NewtonRaphson
+using DataFrames: DataFrame
+using LsqFit: curve_fit, LsqFitResult
+using Distributions: Normal
+
+function baseline_difference(data::ADNIDataset, region::Int)
+    vals = Vector{Float64}()
+    diffs = Vector{Float64}()
+    
+    for i in 1:length(data)
+        sd = calc_suvr(data, i)
+
+        _vals = sd[region,:] 
+        _times = get_times(data, i)
+        
+        val_diff = _vals[end] - _vals[1]
+        t_diff = _times[end] - _times[1]
+
+        diff = val_diff / t_diff
+        
+        push!(vals, _vals[1])
+        push!(diffs, diff)
+    end
+    return DataFrame(ab_suvr = vals, ab_diff = diffs)
+end
+
+function interval(vals, start, stop)
+    findall(x -> start <= x < stop, vals)
+end
+
+function split_data(vals::Vector{Float64}, diffs::Vector{Float64}, start, step, stop)
+
+    @assert length(vals) == length(diffs)
+    
+    ints = Vector{Vector{Float64}}()
+    ps = collect(start:step:stop)
+    
+    starts = findall(x -> x < start, vals)
+    push!(ints, diffs[starts])
+    
+    for i in ps
+        idxs = interval(vals, i, i+step)
+        push!(ints, diffs[idxs])
+    end
+
+    stops = findall(x -> x > stop, vals)
+    push!(ints, diffs[stops])
+
+    xs = [mean(vals[starts]) ; collect(start+step/2:step:stop+step); mean(vals[stops])] 
+    return DataFrame(ab_bin = xs, ab_bin_diffs = mean.(ints))
+end
+
+function fit_second_order_polynomial(vals::Vector{Float64}, diffs::Vector{Float64})
+    f = fit(vals, diffs, 2)
+    return f, roots(f)
+end
+
+function fit_second_order_polynomial(vals::Vector{Float64}, diffs::Vector{Vector{Float64}})
+    return fit_second_order_polynomial(vals, mean.(diffs))
+end
+
+function solve_amyloid_time(xt::Function, vals::Vector{Float64})
+    ts = Vector{Float64}()
+    for val in vals 
+        probN = NonlinearProblem(xt, 40.0, val)
+        sol = solve(probN, NewtonRaphson(), reltol = 1e-9)
+        push!(ts, sol.u)
+    end
+    return ts
+end
+
+function find_amyloid_time(xt::Function, data::ADNIDataset)
+    vals = [d[end] for d in get_initial_conditions.(data)]
+    ts = solve_amyloid_time(xt, vals)
+    ts_idx = findall( x -> x > 0 && x < 100, ts)
+
+    return DataFrame(sub_id = get_id.(data[ts_idx]), 
+                     t_idx = ts_idx, 
+                     ab_time = ts[ts_idx],
+                     ab_summary=vals[ts_idx])
+
+end
+
+sigmoid(t, p) = @. p[1] / (1 + exp(-p[2]*(t - p[3]))) + p[4]
+
+function find_regional_params(data, t_df)
+    ts = t_df.ab_time
+    t_idx = t_df.t_idx
+    params = Vector{LsqFitResult}()
+    for i in 1:72
+        ab_df = baseline_difference(data[t_idx], i)
+        roi_vals = ab_df.ab_suvr
+
+        _p0 = mean(sort(roi_vals)[1:100])
+        _pi = mean(sort(roi_vals)[600:end]) .- _p0
+        p0 = [_pi,1.0,1.0,0]
+        fitted_model = curve_fit(sigmoid, ts, roi_vals, p0)
+        push!(params, fitted_model)
+    end
+    return params
+end
+
+function set_ab_status(ab, tau)
+    tau_df = deepcopy(tau)
+    abstatus = ab[:, "AMYLOID_STATUS_COMPOSITE_REF"] 
+    ab[:, "AMYLOID_STATUS_COMPOSITE_REF"] = coalesce.(ab[:,"AMYLOID_STATUS_COMPOSITE_REF"], -1) 
+
+    zipped_abstatus = zip(findall(x -> x isa Int && x == 1, abstatus), 
+                      findall(x -> x isa Int && x == 1, ab[:, "AMYLOID_STATUS_COMPOSITE_REF"])) 
+
+    @assert allequal(allequal.(zipped_abstatus))
+
+    tau_df.AB_Status = fill(-1, size(tau_df, 1)) 
+
+    for scan in eachrow(tau_df) # Iterate through each row of tau data
+        ID = scan.RID # Get the RID (subject ID) for the current tau row
+        ab_df = filter(x -> x.RID == ID, ab) # Filter amyloid data for matching RID
+        if size(ab_df, 1) == 0 # If no matching amyloid data exists
+            scan.AB_Status = -1 # Set status to -1
+        else
+            tau_scan_date = scan.SCANDATE # Get the scan date for the tau row
+            ab_scan_dates = ab_df.SCANDATE # Get all scan dates for the matching amyloid rows
+            nearest_ab_scan_idx = argmin(abs.(ab_scan_dates .- tau_scan_date)) # Find index of the nearest scan date
+            scan.AB_Status = ab_df[nearest_ab_scan_idx, "AMYLOID_STATUS"] # Assign corresponding amyloid status
+        end
+    end
+    return tau_df
+end
+
+function set_tau_status(tau, df_names, mtl_idx, neo_idx, mtl_cutoff, neo_cutoff)
+    taudata = deepcopy(tau)
+    taudata.MTL_Status = fill(-1, size(taudata, 1)) # Initialize "MTL_Status" column with -1
+    taudata.NEO_Status = fill(-1, size(taudata, 1)) # Initialize "NEO_Status" column with -1
+
+    for scan in eachrow(taudata) # Iterate through each row of tau data
+        mtl = mean(Array(scan[df_names[mtl_idx]])) # Compute mean SUVR for medial temporal lobe regions
+        neo = mean(Array(scan[df_names[neo_idx]])) # Compute mean SUVR for neocortical regions
+        if mtl isa Missing # Check for missing MTL data
+            scan.MTL_Status = -1 # Set status to -1 if data is missing
+        elseif mtl >= mtl_cutoff # Check if MTL mean exceeds cutoff
+            scan.MTL_Status = 1 # Set status to 1 (positive)
+        else
+            scan.MTL_Status = 0 # Set status to 0 (negative)
+        end
+
+        if neo isa Missing # Check for missing neocortical data
+            scan.NEO_Status = -1 # Set status to -1 if data is missing
+        elseif neo >= neo_cutoff # Check if neocortical mean exceeds cutoff
+            scan.NEO_Status = 1 # Set status to 1 (positive)
+        else
+            scan.NEO_Status = 0 # Set status to 0 (negative)
+        end
+    end
+    return taudata
+end
+
+function get_dkt_moments(gmm_moments::DataFrame, dktnames)
+    μ_1 = Vector{Float64}()
+    μ_2 = Vector{Float64}()
+
+    σ_1 = Vector{Float64}()
+    σ_2 = Vector{Float64}()
+    
+    for name in dktnames[1:end]
+        roi = filter( x -> x.region == name, gmm_moments)
+        if roi.C0_mean[1] < roi.C1_mean[1]
+            push!(μ_1, roi.C0_mean[1])
+            push!(μ_2, roi.C1_mean[1])
+            push!(σ_1, sqrt(roi.C0_cov[1]))
+            push!(σ_2, sqrt(roi.C1_cov[1]))
+        elseif roi.C0_mean[1] > roi.C1_mean[1]
+            push!(μ_1, roi.C1_mean[1])
+            push!(μ_2, roi.C0_mean[1])
+            push!(σ_1, sqrt(roi.C1_cov[1]))
+            push!(σ_2, sqrt(roi.C0_cov[1]))
+        end
+    end
+    Normal.(μ_1, σ_1), Normal.(μ_2, σ_2)
+end
+
+end
