@@ -1,5 +1,5 @@
 using ATNModelling
-using ATNModelling.ParcellationUtils: get_parcellation, get_cortex, get_dkt_names
+using ATNModelling.ConnectomeUtils: get_parcellation, get_cortex, get_dkt_names
 using ATNModelling.DataUtils: get_dkt_moments
 using ADNIDatasets: ADNIDataset, get_initial_conditions
 using DrWatson: datadir, projectdir
@@ -22,22 +22,23 @@ for i in 1:72
     writedlm(projectdir("py-analysis/roi-data/data-$i.csv"), x_data)
 end
 
-
 writedlm(projectdir("py-analysis/temporal-rois.csv"), findall(x -> get_lobe(x) == "temporal", cortex))
 
 pypart = CSV.read(projectdir("output/analysis-derivatives/tau-derivatives/pypart.csv"), DataFrame)
 
-gmm_moments = CSV.read(datadir("derivatives/component_moments.csv"), DataFrame)
-ubase, upath = get_dkt_moments(gmm_moments, dktnames)
-v0 = mean.(ubase)
-vi = quantile.(upath, .99)
+tau_params = CSV.read(datadir("derivatives/tau-params.csv"), DataFrame)
+v0 = tau_params.v0
+vi = tau_params.vi
 
 partbase, partpath = get_dkt_moments(pypart,  pypart.region)
 part_vi = quantile.(partpath, .99)
 _part = deepcopy(v0)
 _part[Int.(pypart.region)] .= part_vi
 
-_sympart = mean.(collect((zip(_part[1:36], _part[37:end]))))
-sympart = [_sympart; _sympart]
+
+d = [_part[1:36]; _part[37:end]]
+part_increase = d .- v0
+part_sym_increase = (part_increase[1:36] .+ part_increase[37:end]) ./ 2
+sympart = v0 .+ [part_sym_increase; part_sym_increase]
 
 writedlm(projectdir("output/analysis-derivatives/tau-derivatives/pypart-sym.csv"), sympart)

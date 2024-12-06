@@ -1,18 +1,21 @@
 module ATNModelling
 
-using Reexport
 using Connectomes
 using ADNIDatasets
-@reexport using Statistics: mean
+using Statistics: mean
 using Polynomials
 using NonlinearSolve
 using DataFrames
 using LsqFit
+using DelimitedFiles
+using DifferentialEquations
 
 include("data-utils.jl")
-include("parcellation-utils.jl")
+include("connectome-utils.jl")
+include("simulation-utils.jl")
 
 using .DataUtils
-using .ParcellationUtils
+using .ConnectomeUtils
+using .SimulationUtils
 
 end

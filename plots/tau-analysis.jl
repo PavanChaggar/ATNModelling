@@ -4,6 +4,9 @@ using CairoMakie
 using Distributions
 using Connectomes: get_node_id, plot_roi!
 using DelimitedFiles: readdlm
+using DrWatson: projectdir, datadir
+using ATNModelling.ConnectomeUtils: get_parcellation, get_cortex, get_dkt_names
+using ADNIDatasets: ADNIDataset, get_initial_conditions
 
 taudata = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame);
 
@@ -14,7 +17,6 @@ dktnames = get_dkt_names(cortex)
 
 neg_tau_data = ADNIDataset(abneg_tau, dktnames; min_scans=1)
 neg_subdata = get_initial_conditions.(neg_tau_data)
-
 
 pypart = CSV.read(projectdir("output/analysis-derivatives/tau-derivatives/pypart.csv"), DataFrame)
 
@@ -56,7 +58,6 @@ begin
     display(f1)
 end
 save(projectdir("visualisation/population-analysis/tau-part-gmm-weighted.pdf"), f1)
-
 
 tau_params = CSV.read(datadir("derivatives/tau-params.csv"), DataFrame)
 v0 = tau_params.v0

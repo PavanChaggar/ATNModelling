@@ -3,7 +3,7 @@ using DataFrames
 using DrWatson: projectdir, datadir
 using Statistics
 using ATNModelling.DataUtils: set_ab_status, set_tau_status
-using ATNModelling.ParcellationUtils: get_parcellation, get_cortex, get_dkt_names
+using ATNModelling.ConnectomeUtils: get_parcellation, get_cortex, get_dkt_names
 using Connectomes: connectome_path, Parcellation, get_label
 
 # ------------------------------------------------------------------------------------------

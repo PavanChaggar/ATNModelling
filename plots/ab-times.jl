@@ -1,5 +1,5 @@
 using ATNModelling.DataUtils: baseline_difference, sigmoid
-using ATNModelling.ParcellationUtils: get_parcellation, get_cortex, get_dkt_names
+using ATNModelling.ConnectomeUtils: get_parcellation, get_cortex, get_dkt_names
 using ADNIDatasets: ADNIDataset
 using CairoMakie
 using Polynomials: Polynomial, coeffs, roots

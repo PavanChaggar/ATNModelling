@@ -1,7 +1,7 @@
 using ATNModelling
 using ATNModelling.DataUtils: baseline_difference, split_data, fit_second_order_polynomial, 
                    find_amyloid_time, find_regional_params
-using ATNModelling.ParcellationUtils: get_parcellation, get_cortex, get_dkt_names
+using ATNModelling.ConnectomeUtils: get_parcellation, get_cortex, get_dkt_names
 using ADNIDatasets: ADNIDataset, get_id, get_initial_conditions
 
 using CSV, DataFrames

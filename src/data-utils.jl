@@ -8,7 +8,6 @@ using DataFrames: DataFrame
 using LsqFit: curve_fit, LsqFitResult
 using Distributions: Normal
 
-
 """
     baseline_difference(data::ADNIDataset, region::Int)
 
