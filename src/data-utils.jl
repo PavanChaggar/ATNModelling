@@ -98,7 +98,8 @@ end
 """
     find_amyloid_time(xt::Function, data::ADNIDataset)
 
-Find root of function xt given SUVR value for each subject in `data`.
+Find root of function xt given SUVR value for each subject in `data`. Assumes 
+the final SUVR value corresponds to the amyloid cortical summary.
 """
 function find_amyloid_time(xt::Function, data::ADNIDataset)
     vals = [d[end] for d in get_initial_conditions.(data)]
