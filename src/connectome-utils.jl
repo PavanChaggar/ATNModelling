@@ -1,6 +1,8 @@
 module ConnectomeUtils 
 
-using Connectomes: Parcellation, node2FS, get_lobe, get_node_id, connectome_path
+using Connectomes: Connectome, Parcellation, 
+                   connectome_path, node2FS, get_node_id, 
+                   get_lobe, filter, laplacian_matrix, slice
 
 dktdict = node2FS()
 
