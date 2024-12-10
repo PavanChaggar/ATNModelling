@@ -1,6 +1,7 @@
 module DataUtils
 
-using ADNIDatasets: ADNIDataset, calc_suvr, get_times, get_id, get_initial_conditions
+using ADNIDatasets: ADNIDataset, ADNISubject, calc_suvr, get_times, 
+                    get_id, get_initial_conditions, get_dates
 using Statistics: mean
 using Polynomials: fit, roots
 using NonlinearSolve: NonlinearProblem, solve, NewtonRaphson
@@ -227,6 +228,27 @@ function get_dkt_moments(gmm_moments::DataFrame, dktnames)
         end
     end
     Normal.(μ_1, σ_1), Normal.(μ_2, σ_2)
+end
+
+"""
+    normalise!(data::Vector{Matrix{Float64}}, lower::Vector{Float64}, upper::Vector{Float64})
+
+Normalise in-place the regional data to lie between a `lower` and `upper` 
+bound.
+"""
+function normalise!(data::Vector{Matrix{Float64}}, lower::Vector{Float64}, upper::Vector{Float64})
+    @assert length(lower) == length(upper)
+    @assert allequal(size.(data, 1) .== length(lower))
+    for d in data
+        for i in axes(d, 1)
+            lower_mask = d[i,:] .< lower[i]
+            d[i, lower_mask] .= lower[i]
+            upper_mask = d[i,:] .> upper[i]
+            d[i, upper_mask] .= upper[i]
+        end
+    end
+    @assert allequal([allequal(d .>= lower) for d in data])
+    @assert allequal([allequal(d .<= upper) for d in data])
 end
 
 end

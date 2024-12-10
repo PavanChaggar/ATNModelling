@@ -2,7 +2,7 @@ module InferenceModels
 
 using Turing
 using LinearAlgebra: I
-using ATNModelling.SimulationUtils: resimulate
+using ATNModelling.SimulationUtils: resimulate, simulate_amyloid
 using SciMLBase: successful_retcode
 using DifferentialEquations: ODEProblem
 
@@ -49,6 +49,46 @@ function fit_model(model, ab, tau, atr, args...; n_samples=1000)
     m = model(args...)
     pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
     samples = sample(pst, NUTS(), n_samples)
+    println("Number of Divergences: $(sum(samples[:numerical_error]))")
+    display(summarize(samples))
+    return samples
+end
+
+"""
+    population_ab_inference(inits, u0, ui, ts, n)
+
+Inference model for longitudinal amyloid SUVR with inter-individual 
+variability on amyloid production. 
+The model assumes i.i.d noise between individuals and a Gaussian 
+likelihood function. The noise prior is an InverseGamma(2,3) distribution 
+and the ammyloid production parameter is a standard Normal. 
+"""
+@model function population_ab_inference(inits, u0, ui, ts, n)
+    σ ~ InverseGamma(2, 3)
+
+    α_m ~ Normal()
+    α_s ~ LogNormal()
+
+    α ~ filldist(Normal(α_m, α_s), n)
+
+    sols = simulate_amyloid(inits, u0, ui, α, ts)
+    vecsol = reduce(vcat, reduce.(vcat, sols))
+    
+    ab_data ~ MvNormal(vecsol, σ^2 * I)  
+end
+
+"""
+    fit_model(model, ab, tau, atr, args...; n_samples=1000, n_chains=1)
+
+Fits a generative model `model`, to amyloid biomarker data `ab`. 
+Args should follow the input order of the `model`. Sampling is performed using 
+a NUTS sampler with default settings.
+"""
+function fit_ab_model(model, ab, args...; n_samples=1000, n_chains=1)
+    m = model(args...)
+    ab_vec_data =reduce(vcat, reduce.(vcat, ab))
+    pst = m | (ab_data = ab_vec_data,);
+    samples = sample(pst, NUTS(), MCMCSerial(), n_samples, n_chains)
     println("Number of Divergences: $(sum(samples[:numerical_error]))")
     display(summarize(samples))
     return samples

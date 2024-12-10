@@ -1,6 +1,7 @@
 module SimulationUtils
 
-using DifferentialEquations: ODEProblem, ODEFunction, solve, Tsit5, remake
+using DifferentialEquations: ODEProblem, ODEFunction, solve, Tsit5, remake,
+                             EnsembleProblem
 using CSV: read
 using DataFrames: DataFrame
 using DrWatson: projectdir, datadir
@@ -111,6 +112,45 @@ function generate_data(prob::ODEProblem, t, noise)
     atr = vec(sol[145:216,:]) .+ (randn(size(vec(sol[145:216,:]))) .* noise)
 
     return ab, tau, atr
+end
+
+"""
+    simulate_amyloid(u::Vector{Float64}, u0::Vector{Float64}, ui::Vector{Float64}, a, t::Float64)
+
+Simulate regional amyloid progression using a logistic model with 
+initial conditions `u` that evolves between `u0` and `ui` with rate `a`
+and evaluated at time, `t`.
+"""
+function simulate_amyloid(u::Vector{Float64}, u0::Vector{Float64}, ui::Vector{Float64}, a, t::Float64)
+    x = u .- u0
+    ((x .* ui .* exp.(ui .* a .* t)) ./ (ui .- x .+ x .* exp.(ui .* a .* t))) .+ u0
+end
+
+"""
+    simulate_amyloid(u::Vector{Float64}, u0::Vector{Float64}, ui::Vector{Float64}, a, ts::Vector{Float64})
+
+Simulate regional amyloid progression using a logistic model with 
+initial conditions `u` that evolves between `u0` and `ui` with rate `a`
+and evaluated at times, `ts`.
+"""
+function simulate_amyloid(u::Vector{Float64}, u0::Vector{Float64}, ui::Vector{Float64}, a, ts::Vector{Float64})
+    reduce(hcat, [simulate_amyloid(u, u0, ui, a, t) for t in ts])
+end
+
+"""
+    simulate_amyloid(us::Vector{Vector{Float64}}, u0::Vector{Float64}, ui::Vector{Float64}, 
+                      as, ts::Vector{Vector{Float64}})
+
+Simulate multiple trjacetories of regional amyloid progression 
+using a logistic model with initial conditions `us` that evolves 
+between `u0` and `ui` with rates `as` and evaluated at times, `ts`.
+
+`us`, `as` and `ts` should have the same length, each corresponding to 
+an individual trajectory.
+"""
+function simulate_amyloid(us::Vector{Vector{Float64}}, u0::Vector{Float64}, ui::Vector{Float64}, 
+                          as, ts::Vector{Vector{Float64}})
+        [simulate_amyloid(u, u0, ui, a, t) for (u, a, t) in zip(us, as, ts)]
 end
 
 end
