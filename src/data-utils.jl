@@ -113,6 +113,14 @@ function find_amyloid_time(xt::Function, data::ADNIDataset)
 
 end
 
+
+"""
+    sigmoid(t, p)
+
+Returns a sigmoid function at time `t` with parameters `p`, where 
+p is a 4-dimensional vector comprising the carrying capacity, production 
+rate, t50 and baseline value.
+"""
 sigmoid(t, p) = @. p[1] / (1 + exp(-p[2]*(t - p[3]))) + p[4]
 
 """
@@ -130,7 +138,7 @@ function find_regional_params(data::ADNIDataset, t_df::DataFrame)
 
         _p0 = mean(sort(roi_vals)[1:100])
         _pi = mean(sort(roi_vals)[600:end]) .- _p0
-        p0 = [_pi,1.0,1.0,0]
+        p0 = [_pi,1.0,40.0,_p0]
         fitted_model = curve_fit(sigmoid, ts, roi_vals, p0)
         push!(params, fitted_model)
     end
@@ -249,6 +257,65 @@ function normalise!(data::Vector{Matrix{Float64}}, lower::Vector{Float64}, upper
     end
     @assert allequal([allequal(d .>= lower) for d in data])
     @assert allequal([allequal(d .<= upper) for d in data])
+end
+
+function normalise!(data::Vector{Matrix{Float64}}, lower::Vector{Float64})
+    @assert allequal(size.(data, 1) .== length(lower))
+    for d in data
+        for i in axes(d, 1)
+            lower_mask = d[i,:] .< lower[i]
+            d[i, lower_mask] .= lower[i]
+        end
+    end
+    @assert allequal([allequal(d .>= lower) for d in data])
+end
+
+function calc_times(ab::ADNISubject, tau::ADNISubject)
+    ab_dates = get_dates(ab)
+    tau_dates = get_dates(tau)
+    min_date = minimum([ab_dates; tau_dates])
+    _ab_dates = ab_dates .- min_date
+    _tau_dates = tau_dates .- min_date
+    ab_times = [d.value for d in _ab_dates] ./ 365
+    tau_times = [d.value for d in _tau_dates] ./ 365
+    return ab_times, tau_times
+end
+
+function calc_times(ab::ADNIDataset, tau::ADNIDataset)
+    ab_times = Vector{Vector{Float64}}()
+    tau_times = Vector{Vector{Float64}}()
+
+    for (a, t) in zip(ab, tau)
+        _ab_times, _tau_times = calc_times(a, t)
+        push!(ab_times, _ab_times)
+        push!(tau_times, _tau_times)
+    end
+    return ab_times, tau_times
+end
+
+function align_times(ab, tau)  
+    idx = Vector{Bool}()
+    for (i, j) in zip(ab, tau)
+        push!(idx, (abs(i[1] - j[1]) <= 0.3))
+    end
+    findall(x -> x == true, idx)
+end
+
+function align_data(ab_data, tau_data)
+    pos_ids = get_id.(tau_data)
+    ab_tau_pos = filter(x -> get_id(x) ∈ pos_ids, ab_data)
+    ab_tau_pos_ids = get_id.(ab_tau_pos)
+    
+    tau_pos = filter(x -> get_id(x) ∈ ab_tau_pos_ids, tau_data)
+    sub_idx = reduce(vcat, [findall(x -> get_id(x) ∈ id, tau_pos) for id in ab_tau_pos_ids])
+
+    _tau_pos = tau_pos[sub_idx]    
+    align_idx = align_times(calc_times(ab_tau_pos, _tau_pos)...)
+
+    ab = ab_tau_pos[align_idx]
+    tau =  _tau_pos[align_idx]
+    @assert allequal(get_id.(ab) .== get_id.(tau))
+    return ab, tau
 end
 
 end

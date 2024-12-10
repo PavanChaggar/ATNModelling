@@ -33,7 +33,7 @@ stop  = 1.15
 bin_df = split_data(ab_vf.ab_suvr, ab_vf.ab_diff, start, step, stop)
 CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/ab-binned-vector-field.csv"), bin_df)
 
-f, roots = fit_second_order_polynomial(bin_df.ab_bin, bin_df.ab_bin_diffs)
+f, rts = fit_second_order_polynomial(bin_df.ab_bin, bin_df.ab_bin_diffs)
 writedlm(projectdir("output/analysis-derivatives/ab-derivatives/ab-polynomial-coeffs.csv"), coeffs(f))
 # f = 0.16844315367056056 + 0.4146967939561749*x - 0.2330383236437777*x^2 
 # roots = [0.627346338525677, 1.1521755335509531]
@@ -52,11 +52,11 @@ t_df = CSV.read(projectdir("output/analysis-derivatives/ab-derivatives/ab-times.
 params = find_regional_params(data, t_df);
 
 u0 = [params[i].param[4] for i in 1:72]
-diff = [params[i].param[1] for i in 1:72]
-ui = [diff[i] + u0[i] for i in 1:72]
+diffs = [params[i].param[1] for i in 1:72]
+ui = [diffs[i] + u0[i] for i in 1:72]
 α =  [params[i].param[2] for i in 1:72]
 t50 =  [params[i].param[3] for i in 1:72]
 
-dfparams = DataFrame(u0 = u0, alpha = α, t50 = t50, ui = ui, diff = diff)
+dfparams = DataFrame(u0 = u0, alpha = α, t50 = t50, ui = ui, diff = diffs)
 
 CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/ab-params.csv"), dfparams)
