@@ -12,6 +12,7 @@ using DifferentialEquations
 using SciMLBase
 using Turing
 using LinearAlgebra
+using ADTypes
 
 include("data-utils.jl")
 include("connectome-utils.jl")

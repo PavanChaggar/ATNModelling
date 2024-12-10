@@ -121,7 +121,7 @@ Simulate regional amyloid progression using a logistic model with
 initial conditions `u` that evolves between `u0` and `ui` with rate `a`
 and evaluated at time, `t`.
 """
-function simulate_amyloid(u::Vector{Float64}, u0::Vector{Float64}, ui::Vector{Float64}, a, t::Float64)
+function simulate_amyloid(u::AbstractVector, u0::Vector{Float64}, ui::Vector{Float64}, a, t::Number)
     x = u .- u0
     ((x .* ui .* exp.(ui .* a .* t)) ./ (ui .- x .+ x .* exp.(ui .* a .* t))) .+ u0
 end

@@ -5,6 +5,7 @@ using LinearAlgebra: I
 using ATNModelling.SimulationUtils: resimulate, simulate_amyloid
 using SciMLBase: successful_retcode
 using DifferentialEquations: ODEProblem
+using ADTypes: AutoForwardDiff
 
 """
     atn_inference(prob::ODEProblem, t)
@@ -45,10 +46,11 @@ Fits a generative model `model`, to biomarker data `ab`, `tau` and `atr`.
 Args should follow the input order of the `model`. Sampling is performed using 
 a NUTS sampler with default settings.
 """
-function fit_model(model, ab, tau, atr, args...; n_samples=1000)
+function fit_model(model, ab, tau, atr, args...; 
+                    n_samples=1000, n_chains, adbackend)
     m = model(args...)
     pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
-    samples = sample(pst, NUTS(), n_samples)
+    samples = sample(pst, NUTS(;adtype=adbackend), MCMCSerial(), n_samples, n_chains)
     println("Number of Divergences: $(sum(samples[:numerical_error]))")
     display(summarize(samples))
     return samples
