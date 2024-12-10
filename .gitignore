@@ -1,6 +1,6 @@
 test
 
-data
+data/ADNI
 output/plots
 
 py-analysis/env
