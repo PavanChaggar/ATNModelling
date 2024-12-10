@@ -47,7 +47,7 @@ Args should follow the input order of the `model`. Sampling is performed using
 a NUTS sampler with default settings.
 """
 function fit_model(model, ab, tau, atr, args...; 
-                    n_samples=1000, n_chains, adbackend)
+                    n_samples=1000, n_chains=1, adbackend=AutoForwardDiff())
     m = model(args...)
     pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
     samples = sample(pst, NUTS(;adtype=adbackend), MCMCSerial(), n_samples, n_chains)

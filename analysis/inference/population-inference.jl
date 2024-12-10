@@ -179,7 +179,7 @@ vol_vec_data = vec_sol(vols)
 pst_samples = fit_model(population_atn_inference, 
                         ab_vec_data, tau_vec_data, vol_vec_data, 
                         ab_inits, inits, ab_times, tau_times, delay, n_subjects;
-                        n_samples = 1000, n_chains=1, adbackend=AutoZygote())
+                        n_samples = 1000, n_chains=1)
 
 using Serialization
 serialize(projectdir("output/chains/population-atn/pst_samples-test.jls"), pst_samples)
