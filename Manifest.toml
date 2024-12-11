@@ -2,11 +2,11 @@
 
 julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "a6789bb4105177037d13a7d5bc3c8f73479fec37"
+project_hash = "c27c7979901044a5204d79302ae727d0f0629a53"
 
 [[deps.ADNIDatasets]]
 deps = ["CSV", "DataFrames", "Dates", "Setfield"]
-git-tree-sha1 = "08807e5ea458bbb8122069412f4d91942f0e5c29"
+git-tree-sha1 = "0e7f4b75edf0b78cbfcf2de1d0f11c9dd0c4f72e"
 repo-rev = "main"
 repo-url = "https://github.com/PavanChaggar/ADNIDatasets.jl.git"
 uuid = "3276ce4d-5fec-4d11-86fe-35d359dbefae"
@@ -294,6 +294,12 @@ version = "1.11.0"
 git-tree-sha1 = "aebf55e6d7795e02ca500a689d326ac979aaf89e"
 uuid = "9718e550-a3fa-408a-8086-8db961cd8217"
 version = "0.1.1"
+
+[[deps.BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Profile", "Statistics", "UUIDs"]
+git-tree-sha1 = "f1dff6729bc61f4d49e140da1af55dcd1ac97b2f"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "1.5.0"
 
 [[deps.Bijectors]]
 deps = ["ArgCheck", "ChainRulesCore", "ChangesOfVariables", "Distributions", "DocStringExtensions", "Functors", "InverseFunctions", "IrrationalConstants", "LinearAlgebra", "LogExpFunctions", "MappedArrays", "Random", "Reexport", "Roots", "SparseArrays", "Statistics"]
@@ -2567,6 +2573,10 @@ deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 version = "1.11.0"
 
+[[deps.Profile]]
+uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
+version = "1.11.0"
+
 [[deps.ProgressLogging]]
 deps = ["Logging", "SHA", "UUIDs"]
 git-tree-sha1 = "80d919dee55b9c50e8d9e2da5eeafff3fe58b539"
@@ -3297,6 +3307,18 @@ version = "0.35.3"
     [deps.Turing.weakdeps]
     DynamicHMC = "bbc10e6e-7c05-544b-b16e-64fede858acb"
     Optim = "429524aa-4258-5aef-a3af-852621145aeb"
+
+[[deps.TuringBenchmarking]]
+deps = ["ADTypes", "AbstractMCMC", "BenchmarkTools", "DynamicPPL", "ForwardDiff", "LinearAlgebra", "LogDensityProblems", "LogDensityProblemsAD", "PrettyTables", "Requires", "ReverseDiff", "Zygote"]
+git-tree-sha1 = "2421fcac17d8f62c02e9c95c60968faa72ef95d8"
+uuid = "0db1332d-5c25-4deb-809f-459bc696f94f"
+version = "0.5.6"
+
+    [deps.TuringBenchmarking.extensions]
+    TuringBenchmarkingBridgeStanExt = "BridgeStan"
+
+    [deps.TuringBenchmarking.weakdeps]
+    BridgeStan = "c88b6f0a-829e-4b0b-94b7-f06ab5908f5a"
 
 [[deps.UUIDs]]
 deps = ["Random", "SHA"]

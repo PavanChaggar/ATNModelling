@@ -36,7 +36,7 @@ ab_data = ADNIDataset(ab_data_df, dktnames; min_scans=2, reference_region="COMPO
 # Tau data 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
 tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, tau_data_df);
-tau_pos = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
+tau_pos = ADNIDataset(tau_pos_df, dktnames; min_scans=2)
 
 pos_ids = get_id.(tau_pos)
 tau_pos_idx = reduce(vcat, [findall(x -> get_id(x) ∈ id, ab_data) for id in pos_ids])
@@ -75,8 +75,8 @@ function concentration(v, v0, vi)
 end
 
 function tau_atrophy(dx, x, p, t; L = L, u0=u0, ui=ui_diff, v0=v0, part=part)
-    v = @view x[1:72]
-    a = @view x[73:end]
+    v = x[1:72]
+    a = x[73:end]
 
     u = @view p[1:72]
     α_a, ρ_t, α_t, β, η, d = @view p[73:end]
@@ -84,7 +84,7 @@ function tau_atrophy(dx, x, p, t; L = L, u0=u0, ui=ui_diff, v0=v0, part=part)
     vi = (part .+ β .* (simulate_amyloid(u, u0, ui, α_a, t+d) .- u0))
     _vi_max = (part .+ (β .* ui))
 
-    dx[1:72] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* ((vi .- v0) .- (v .- v0))
+    dx[1:72] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* ((_vi_max .- v0) .- (v .- v0))
     dx[73:end] .= η .* concentration.(v, v0, _vi_max) .* ( 1 .- a )
     return nothing
 end
@@ -94,6 +94,16 @@ n_subjects = length(inits)
 tspan = (0., 10.0)
 prob = ODEProblem(tau_atrophy, inits[1], tspan, 
                                   [ab_inits[1]; [1.0,1.0,1.0,1.0,1.0,0.0]])
+
+@code_warntype solve(prob, Tsit5(), saveat=0.1)
+
+tn_ensemble_prob = EnsembleProblem(prob,
+prob_func=make_prob_func(inits, ab_inits,
+                         α_a, ρ_t, α_t, β, η, delays, 
+                        tau_times), 
+                        output_func=output_func)
+tn_sols = solve(tn_ensemble_prob, Tsit5(), trajectories=n,
+                reltol=1e-6, abstol=1e-6)
 
 function make_prob_func(initial_conditions, ab_inits, α_a, ρ_t, α_t, β, η, d, times)
     function prob_func(prob,i,repeat)

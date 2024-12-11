@@ -40,6 +40,8 @@ func = make_atn_model(u0, ui, v0, part, L)
 ts = LinRange(0.0, 20, 5)
 sol_ts = simulate(func, inits, tspan, params; saveat=0.1)
 sol_ts = simulate(func, inits, tspan, params; saveat=ts)
+
+@code_warntype simulate(func, inits, tspan, params; saveat=ts)
 # --------------------------------------------------------------------------------
 # Simulation visualisatin
 # --------------------------------------------------------------------------------

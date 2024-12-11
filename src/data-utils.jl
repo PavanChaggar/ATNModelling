@@ -293,14 +293,6 @@ function calc_times(ab::ADNIDataset, tau::ADNIDataset)
     return ab_times, tau_times
 end
 
-function align_times(ab, tau)  
-    idx = Vector{Bool}()
-    for (i, j) in zip(ab, tau)
-        push!(idx, (abs(i[1] - j[1]) <= 0.3))
-    end
-    findall(x -> x == true, idx)
-end
-
 function align_data(ab_data, tau_data)
     pos_ids = get_id.(tau_data)
     ab_tau_pos = filter(x -> get_id(x) ∈ pos_ids, ab_data)
@@ -308,14 +300,39 @@ function align_data(ab_data, tau_data)
     
     tau_pos = filter(x -> get_id(x) ∈ ab_tau_pos_ids, tau_data)
     sub_idx = reduce(vcat, [findall(x -> get_id(x) ∈ id, tau_pos) for id in ab_tau_pos_ids])
-
     _tau_pos = tau_pos[sub_idx]    
-    align_idx = align_times(calc_times(ab_tau_pos, _tau_pos)...)
+      
+    ab_times, tau_times = calc_times(ab_tau_pos, _tau_pos)
+    
+    sub_idx = Vector{Int}()
+    ab_idx = Vector{Int}()
+    tau_idx = Vector{Int}()
+    for (j, (at, tt)) in enumerate(zip(ab_times, tau_times))
+        for i in eachindex(tt)
+            idx = findfirst(x -> abs(x - tt[i]) <= 0.3, at)
+            if idx isa Nothing
+                continue
+            else
+                if length(at[idx:end]) > 1 && length(tt[i:end]) > 1
+                    push!(sub_idx, j)
+                    push!(ab_idx, idx)
+                    push!(tau_idx, i)
+                    break
+                end
+            end
+        end
+    end
+    
+    _ab_data_ts = [d[t:end] for (d, t) in zip(ab_tau_pos[sub_idx], ab_idx)]
+    _tau_data_ts = [d[t:end] for (d, t) in zip(_tau_pos[sub_idx], tau_idx)]
+    ab = ADNIDataset(length(_ab_data_ts), _ab_data_ts, ab_data.rois)
+    tau = ADNIDataset(length(_tau_data_ts), _tau_data_ts, tau_data.rois)
 
-    ab = ab_tau_pos[align_idx]
-    tau =  _tau_pos[align_idx]
     @assert allequal(get_id.(ab) .== get_id.(tau))
     return ab, tau
 end
 
+function get_time_idx(d::Vector{Vector{Float64}}, ts::Vector{Vector{Float64}})
+    [findall(x -> x ∈ a, t) for (a, t) in zip(d, ts)]
+end
 end
