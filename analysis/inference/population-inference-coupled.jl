@@ -203,7 +203,7 @@ m = ensemble_fit(ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_ti
 m()
 
 using TuringBenchmarking
-turing_suite = make_turing_suite(m; adbackends=[AutoForwardDiff(chunksize=0), AutoZygote()])
+turing_suite = make_turing_suite(m; adbackends=[AutoForwardDiff(chunksize=0)])
 run(turing_suite)
 
 pst = sample(m, NUTS(), 1000)
