@@ -313,7 +313,7 @@ function align_data(ab_data, tau_data)
             if idx isa Nothing
                 continue
             else
-                if length(at[idx:end]) > 1 && length(tt[i:end]) > 1
+                if length(at[idx:end]) > 1 && length(tt[i:end]) > 2
                     push!(sub_idx, j)
                     push!(ab_idx, idx)
                     push!(tau_idx, i)

@@ -128,18 +128,22 @@ end
     α_t ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
     η ~ filldist(truncated(Normal(Em, Es), lower=0), n)
 
-    for i in eachindex(n)
+    for i in eachindex(1:n)
         _prob = remake(prob, u0 = inits[i], p = [ρ_t[i], α_a[i], α_t[i], β, η[i]])
         _sol = solve(_prob, Tsit5(), abstol = 1e-6, reltol = 1e-6, saveat=times[i])
         if !successful_retcode(_sol)
             Turing.@addlogprob! -Inf
-            break
             println("failed")
+            break
         end
         ab_preds, tau_preds, vol_preds = split_sols_2(_sol, ab_tidx[i], tau_tidx[i])
-        ab_data[i] ~ MvNormal(ab_preds, σ_a^2 * I)
-        tau_data[i] ~ MvNormal(tau_preds, σ_a^2 * I)
-        vol_data[i] ~ MvNormal(vol_preds, σ_a^2 * I) 
+        # ab_data[i] ~ MvNormal(ab_preds, σ_a^2 * I)
+        # tau_data[i] ~ MvNormal(tau_preds, σ_t^2 * I)
+        # vol_data[i] ~ MvNormal(vol_preds, σ_v^2 * I) 
+        Turing.@addlogprob! loglikelihood(MvNormal(ab_preds, σ_a^2 * I),  ab_data[i])
+        Turing.@addlogprob! loglikelihood(MvNormal(tau_preds, σ_t^2 * I),  tau_data[i])
+        Turing.@addlogprob! loglikelihood(MvNormal(vol_preds, σ_v^2 * I),  vol_data[i])
+        
     end
     # ensemble_prob = EnsembleProblem(prob, 
     #                                 prob_func=make_prob_func(inits, ρ_t, α_a, α_t, β, η, times), 
@@ -199,7 +203,7 @@ m = ensemble_fit(ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_ti
 m()
 
 using TuringBenchmarking
-turing_suite = make_turing_suite(m; adbackends=[AutoForwardDiff(chunksize=0)])
+turing_suite = make_turing_suite(m; adbackends=[AutoForwardDiff(chunksize=0), AutoZygote()])
 run(turing_suite)
 
 pst = sample(m, NUTS(), 1000)
