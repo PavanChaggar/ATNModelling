@@ -68,27 +68,42 @@ sympart = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/pypart
 using GLMakie
 using ColorSchemes, Colors
 right_cortical_nodes = filter(x -> x.Hemisphere == "right", cortex)
-
+left_cortical_nodes  = filter(x -> x.Hemisphere == "left", cortex)
 cmap = ColorSchemes.viridis;
-nodes = get_node_id.(right_cortical_nodes)
+
+right_nodes = get_node_id.(right_cortical_nodes)
+left_nodes = get_node_id.(left_cortical_nodes)
 
 cmap = ColorSchemes.viridis;
 
 d = (sympart .- minimum(v0)) ./ (maximum(vi) .- minimum(v0))
 
 begin
-    f = Figure(size = (750, 400))
+    f = Figure(size = (750, 700))
+    
     ax = Axis3(f[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
     hidedecorations!(ax)
     hidespines!(ax)
-    plot_roi!(nodes, d, cmap)
+    plot_roi!(right_nodes, d[1:36], cmap)
+    
     ax = Axis3(f[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-
     hidedecorations!(ax)
     hidespines!(ax)
-    plot_roi!(nodes, d, cmap)
-    Colorbar(f[2, 1:2], limits = (minimum(v0), maximum(vi)), colormap = cmap,
+    plot_roi!(right_nodes, d[1:36], cmap)
+
+    ax = Axis3(f[2,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    plot_roi!(left_nodes, d[37:end], cmap)
+
+    ax = Axis3(f[2,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    plot_roi!(left_nodes, d[37:end], cmap)
+
+    Colorbar(f[3, 1:2], limits = (minimum(v0), maximum(vi)), colormap = cmap,
     vertical = false, label = "SUVR", labelsize=25, flipaxis=false,
     ticksize=18, ticklabelsize=20, ticks=1:0.5:3.5, labelpadding=3)
+    f
 end
 save("output/plots/population-analysis/part-field.jpeg", f)

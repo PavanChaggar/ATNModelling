@@ -81,25 +81,39 @@ save(projectdir("output/plots/population-analysis/ab-inferior-temporal.pdf"), f)
 using GLMakie; GLMakie.activate!()
 using ColorSchemes, Colors
 right_cortical_nodes = filter(x -> x.Hemisphere == "right", get_parcellation() |> get_cortex)
+left_cortical_nodes = filter(x -> x.Hemisphere == "left", get_parcellation() |> get_cortex)
 cmap = ColorSchemes.viridis;
 # cmap = ColorScheme(sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9));
 using Connectomes:get_node_id, plot_roi!
-nodes = get_node_id.(right_cortical_nodes)
+right_nodes = get_node_id.(right_cortical_nodes)
+left_nodes = get_node_id.(left_cortical_nodes)
 ui = dfparams.ui
 d = (ui .- minimum(ui)) ./ (maximum(ui) .- minimum(ui))
 begin
-    f = Figure(size = (750, 400))
+    f = Figure(size = (750, 700))
     ax = Axis3(f[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
     hidedecorations!(ax)
     hidespines!(ax)
-    plot_roi!(nodes, d, cmap)
+    plot_roi!(right_nodes, d[1:36], cmap)
     ax = Axis3(f[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
 
     hidedecorations!(ax)
     hidespines!(ax)
-    plot_roi!(nodes, d, cmap)
-    Colorbar(f[2, 1:2], limits = (0.8, maximum(ui)), colormap = cmap,
+    plot_roi!(right_nodes, d[1:36], cmap)
+
+    ax = Axis3(f[2,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    plot_roi!(left_nodes, d[37:end], cmap)
+    
+    ax = Axis3(f[2,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    plot_roi!(left_nodes, d[37:end], cmap)
+
+    Colorbar(f[3, 1:2], limits = (minimum(ui), maximum(ui)), colormap = cmap,
     vertical = false, label = "SUVR", labelsize=25, flipaxis=false,
     ticksize=18, ticklabelsize=20, ticks=0.8:0.1:1.4, labelpadding=3)
+    f
 end
 save(projectdir("output/plots/population-analysis/ab-carrying-capacities.jpeg"), f)
