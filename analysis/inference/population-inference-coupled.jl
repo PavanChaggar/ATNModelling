@@ -11,7 +11,6 @@ using DrWatson: projectdir, datadir
 using CSV, DataFrames
 using SciMLBase: successful_retcode
 using DifferentialEquations, Turing, LinearAlgebra
-using SciMLSensitivity, ADTypes
 # --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
@@ -36,7 +35,7 @@ ab_data = ADNIDataset(ab_data_df, dktnames; min_scans=2, reference_region="COMPO
 # Tau data 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
 tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, tau_data_df);
-tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=2)
+tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
 
 ab, tau = align_data(ab_data, tau_data)
 
@@ -46,6 +45,9 @@ ts = [sort(unique([a; t])) for (a, t) in zip(ab_times, tau_times)]
 
 ab_tidx = get_time_idx(ab_times, ts)
 tau_tidx = get_time_idx(tau_times, ts)
+
+@assert allequal([allequal(ab_times[i] .== ts[i][ab_tidx[i]]) for i in 1:22])
+@assert allequal([allequal(tau_times[i] .== ts[i][tau_tidx[i]]) for i in 1:22])
 
 ab_suvr = calc_suvr.(ab)
 normalise!(ab_suvr, u0, ui)
@@ -63,7 +65,7 @@ vol_inits = [vol[:,1] for vol in vols]
 atn_model = make_atn_model(u0, ui, v0, part, L)
 prob = make_prob(atn_model, 
           [ab_inits[1]; tau_inits[1]; vol_inits[1]], 
-          (0.0,10.0), [1.0,1.0,1.0,3.5,1.0])
+          (0.0,7.5), [1.0,1.0,1.0,3.5,1.0])
 
 # function make_prob_func(initial_conditions, ρ_t, α_a, α_t, β, η, _times)
 #     function prob_func(prob,i,repeat)
@@ -109,28 +111,28 @@ end
     σ_t ~ InverseGamma(2,3)
     σ_v ~ InverseGamma(2,3)
     
-    Pm_t ~ LogNormal() #Beta(2,2) #LogNormal(0.0, 1.0) #Uniform(0.0,3.0)
-    Ps_t ~ truncated(Normal(), lower=0)
-
-    Am_a ~ LogNormal()
+    Am_a ~ Normal()
     As_a ~ truncated(Normal(), lower=0)
+
+    Pm_t ~ truncated(Normal(), lower=0)
+    Ps_t ~ truncated(Normal(), lower=0)
     
-    Am_t ~ LogNormal()
+    Am_t ~ Normal()
     As_t ~ truncated(Normal(), lower=0)
 
-    Em ~ LogNormal()
+    Em ~ truncated(Normal(), lower=0)
     Es ~ truncated(Normal(), lower=0)
     
-    β ~ truncated(Normal(3, 3), lower=0)
+    β ~ truncated(Normal(3, 1), lower=0)
 
-    ρ_t ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
     α_a ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
+    ρ_t ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
     α_t ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
     η ~ filldist(truncated(Normal(Em, Es), lower=0), n)
 
     for i in eachindex(1:n)
-        _prob = remake(prob, u0 = inits[i], p = [ρ_t[i], α_a[i], α_t[i], β, η[i]])
-        _sol = solve(_prob, Tsit5(), abstol = 1e-6, reltol = 1e-6, saveat=times[i])
+        _prob = remake(prob, u0 = inits[i], p = [α_a[i], ρ_t[i], α_t[i], β, η[i]])
+        _sol = solve(_prob, Tsit5(), abstol = 1e-9, reltol = 1e-9, saveat=times[i])
         if !successful_retcode(_sol)
             Turing.@addlogprob! -Inf
             println("failed")
@@ -194,7 +196,6 @@ end
 #     pst.args...,
 # )
 
-
 ab_vec_data = vec.(ab_suvr)
 tau_vec_data = vec.(tau_suvr)
 vol_vec_data = vec.(vols)
@@ -203,8 +204,6 @@ m = ensemble_fit(ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_ti
 m()
 
 using TuringBenchmarking
-turing_suite = make_turing_suite(m; adbackends=[AutoForwardDiff(chunksize=0)])
-run(turing_suite)
 
 pst = sample(m, NUTS(), 1000)
 
