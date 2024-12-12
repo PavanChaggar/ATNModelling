@@ -107,28 +107,28 @@ function split_sols_2(s, a_idx, t_idx)
 end
 
 @model function ensemble_fit(ab_data, tau_data, vol_data, prob, inits, times, ab_tidx, tau_tidx, n)
-    σ_a ~ InverseGamma(2,3)
-    σ_t ~ InverseGamma(2,3)
-    σ_v ~ InverseGamma(2,3)
+    σ_a  ~ InverseGamma(2,3)
+    σ_t  ~ InverseGamma(2,3)
+    σ_v  ~ InverseGamma(2,3)
     
-    Am_a ~ Normal()
+    Am_a ~ truncated(Normal(), lower=0)
     As_a ~ truncated(Normal(), lower=0)
 
     Pm_t ~ truncated(Normal(), lower=0)
     Ps_t ~ truncated(Normal(), lower=0)
     
-    Am_t ~ Normal()
+    Am_t ~ truncated(Normal(), lower=0)
     As_t ~ truncated(Normal(), lower=0)
 
-    Em ~ truncated(Normal(), lower=0)
-    Es ~ truncated(Normal(), lower=0)
+    Em   ~ truncated(Normal(), lower=0)
+    Es   ~ truncated(Normal(), lower=0)
     
-    β ~ truncated(Normal(3, 1), lower=0)
+    β    ~ truncated(Normal(3, 1), lower=0)
 
-    α_a ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
-    ρ_t ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
-    α_t ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
-    η ~ filldist(truncated(Normal(Em, Es), lower=0), n)
+    α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
+    ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
+    α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
+    η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
 
     for i in eachindex(1:n)
         _prob = remake(prob, u0 = inits[i], p = [α_a[i], ρ_t[i], α_t[i], β, η[i]])
@@ -208,7 +208,7 @@ using TuringBenchmarking
 pst = sample(m, NUTS(), 1000)
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-test.jls"), pst)
+serialize(projectdir("output/chains/population-atn/pst-samples-test-truncated-normal.jls"), pst)
 
 println("Number of Divergences: $(sum(pst[:numerical_error]))")
 display(summarize(pst))
