@@ -117,7 +117,7 @@ end
     Em   ~ truncated(Normal(), lower=0)
     Es   ~ truncated(Normal(), lower=0)
     
-    β    ~ Uniform(0., 6.)
+    β    ~ Uniform(0., 7.5)
     
     α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
@@ -144,8 +144,8 @@ end
     ab_preds, tau_preds, vol_preds =  split_sols_ensemble(_esol, ab_tidx, tau_tidx)
     
     ab_data ~ MvNormal(ab_preds, σ_a^2 * I)
-    tau_data ~ MvNormal(tau_preds, σ_a^2 * I)
-    vol_data ~ MvNormal(vol_preds, σ_a^2 * I) 
+    tau_data ~ MvNormal(tau_preds, σ_t^2 * I)
+    vol_data ~ MvNormal(vol_preds, σ_v^2 * I) 
 end
 
 

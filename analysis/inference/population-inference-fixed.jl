@@ -94,7 +94,7 @@ vol_vec_data = vectorise(vols)
 
 m = ensemble_atn(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
 
-pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data, β=fitted_model.param[1]);
+pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data, β=fitted_model.param[1],);
 pst()
 
 println("Starting Inference")
