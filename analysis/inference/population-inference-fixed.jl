@@ -98,7 +98,7 @@ pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_da
 pst()
 
 println("Starting Inference")
-samples = sample(pst, NUTS(;adtype=adbackend), MCMCSerial(), 1000, 1)
+samples = sample(pst, NUTS(), MCMCSerial(), 1000, 1)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
