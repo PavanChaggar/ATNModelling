@@ -335,4 +335,8 @@ end
 function get_time_idx(d::Vector{Vector{Float64}}, ts::Vector{Vector{Float64}})
     [findall(x -> x ∈ a, t) for (a, t) in zip(d, ts)]
 end
+
+function vectorise(d::Vector{Matrix{Float64}})
+    reduce(vcat, vec.(d))
+end
 end

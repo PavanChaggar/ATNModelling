@@ -73,11 +73,34 @@ n_subjects = length(ab)
 # ------------------------------------------------------------------
 # Inference
 # ------------------------------------------------------------------
+using LsqFit
+
+linearmodel(x, p) = p[1] * x
+fitted_model = curve_fit(linearmodel, ui .- u0, vi .- part, [1.0])
+fitted_model.param
+# using CairoMakie
+# begin
+#     f = Figure(size=(600, 500))
+#     ax = Axis(f[1,1])
+#     ylims!(ax, 0.0, 5.0)
+#     xlims!(ax, 0.0, 5.0)
+#     scatter!(part .+ fitted_model.param[1] * (ui .- u0), vi)    
+#     f
+# end
+
 ab_vec_data = vectorise(ab_suvr)
 tau_vec_data = vectorise(tau_suvr)
 vol_vec_data = vectorise(vols)
 
-pst = fit_model(ensemble_atn, ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
+m = ensemble_atn(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
+
+pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data, β=fitted_model.param[1]);
+pst()
+
+println("Starting Inference")
+samples = sample(pst, NUTS(;adtype=adbackend), MCMCSerial(), 1000, 1)
+println("Number of Divergences: $(sum(samples[:numerical_error]))")
+display(summarize(samples))
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-test-truncated-normal.jls"), pst)
+serialize(projectdir("output/chains/population-atn/pst-samples-test-truncated-normal-fixed.jls"), pst)

@@ -2,9 +2,11 @@ module InferenceModels
 
 using Turing
 using LinearAlgebra: I
-using ATNModelling.SimulationUtils: resimulate, simulate_amyloid
+using ATNModelling.SimulationUtils: resimulate, simulate_amyloid, 
+                   make_atn_prob_func, atn_output_func, split_sols_ensemble, split_sols_serial,
+                   success_condition, get_retcodes
 using SciMLBase: successful_retcode
-using DifferentialEquations: ODEProblem
+using DifferentialEquations: ODEProblem, EnsembleProblem, Tsit5, solve, remake
 using ADTypes: AutoForwardDiff
 
 """
@@ -47,13 +49,14 @@ Args should follow the input order of the `model`. Sampling is performed using
 a NUTS sampler with default settings.
 """
 function fit_model(model, ab, tau, atr, args...; 
-                    n_samples=1000, n_chains=1, adbackend=AutoForwardDiff())
+                    n_samples=1000, n_chains=1, adbackend=AutoForwardDiff(chunksize=0))
     m = model(args...)
     pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
+    println("Starting Inference")
     samples = sample(pst, NUTS(;adtype=adbackend), MCMCSerial(), n_samples, n_chains)
     println("Number of Divergences: $(sum(samples[:numerical_error]))")
     display(summarize(samples))
-    return samples
+    return pst
 end
 
 """
@@ -94,6 +97,113 @@ function fit_ab_model(model, ab, args...; n_samples=1000, n_chains=1)
     println("Number of Divergences: $(sum(samples[:numerical_error]))")
     display(summarize(samples))
     return samples
+end
+
+
+@model function ensemble_atn(prob, inits, times, ab_tidx, tau_tidx, n)
+    σ_a  ~ InverseGamma(2,3)
+    σ_t  ~ InverseGamma(2,3)
+    σ_v  ~ InverseGamma(2,3)
+    
+    Am_a ~ truncated(Normal(), lower=0)
+    As_a ~ truncated(Normal(), lower=0)
+
+    Pm_t ~ truncated(Normal(), lower=0)
+    Ps_t ~ truncated(Normal(), lower=0)
+    
+    Am_t ~ truncated(Normal(), lower=0)
+    As_t ~ truncated(Normal(), lower=0)
+
+    Em   ~ truncated(Normal(), lower=0)
+    Es   ~ truncated(Normal(), lower=0)
+    
+    β    ~ Uniform(0., 6.)
+    
+    α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
+    ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
+    α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
+    η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
+
+    ensemble_prob = EnsembleProblem(prob, 
+                                    prob_func=make_atn_prob_func(inits, α_a, ρ_t, α_t, β, η, times), 
+                                    output_func=atn_output_func)
+    
+    _esol = solve(ensemble_prob,
+                    Tsit5(),
+		            verbose=false,
+                    abstol = 1e-6, 
+                    reltol = 1e-6, 
+                    trajectories=n)
+
+    if !success_condition(get_retcodes(_esol))
+        Turing.@addlogprob! -Inf
+        println(findall(x -> x == 0, get_retcodes(_esol)))
+        println("failed")
+        return nothing
+    end
+    ab_preds, tau_preds, vol_preds =  split_sols_ensemble(_esol, ab_tidx, tau_tidx)
+    
+    ab_data ~ MvNormal(ab_preds, σ_a^2 * I)
+    tau_data ~ MvNormal(tau_preds, σ_a^2 * I)
+    vol_data ~ MvNormal(vol_preds, σ_a^2 * I) 
+end
+
+
+@model function serial_atn(ab_data, tau_data, vol_data, prob, inits, times, ab_tidx, tau_tidx, n)
+    σ_a  ~ InverseGamma(2,3)
+    σ_t  ~ InverseGamma(2,3)
+    σ_v  ~ InverseGamma(2,3)
+    
+    Am_a ~ truncated(Normal(), lower=0)
+    As_a ~ truncated(Normal(), lower=0)
+
+    Pm_t ~ truncated(Normal(), lower=0)
+    Ps_t ~ truncated(Normal(), lower=0)
+    
+    Am_t ~ truncated(Normal(), lower=0)
+    As_t ~ truncated(Normal(), lower=0)
+
+    Em   ~ truncated(Normal(), lower=0)
+    Es   ~ truncated(Normal(), lower=0)
+    
+    β    ~ truncated(Normal(3, 1), lower=0)
+
+    α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
+    ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
+    α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
+    η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
+
+    for i in eachindex(1:n)
+        _prob = remake(prob, u0 = inits[i], p = [α_a[i], ρ_t[i], α_t[i], β, η[i]])
+        _sol = solve(_prob, Tsit5(), abstol = 1e-6, reltol = 1e-6, saveat=times[i])
+        if !successful_retcode(_sol)
+            Turing.@addlogprob! -Inf
+            println("failed")
+            break
+        end
+        ab_preds, tau_preds, vol_preds = split_sols_serial(_sol, ab_tidx[i], tau_tidx[i])
+        # ab_data[i] ~ MvNormal(ab_preds, σ_a^2 * I)
+        # tau_data[i] ~ MvNormal(tau_preds, σ_t^2 * I)
+        # vol_data[i] ~ MvNormal(vol_preds, σ_v^2 * I) 
+        Turing.@addlogprob! loglikelihood(MvNormal(ab_preds, σ_a^2 * I),  ab_data[i])
+        Turing.@addlogprob! loglikelihood(MvNormal(tau_preds, σ_t^2 * I),  tau_data[i])
+        Turing.@addlogprob! loglikelihood(MvNormal(vol_preds, σ_v^2 * I),  vol_data[i])
+        
+    end
+end
+
+function fit_serial_atn(model, ab_data, tau_data, vol_data, args...; 
+                        n_samples=1000, n_chains=1, adbackend=AutoForwardDiff(chunksize=0))
+    ab_vec_data = vec.(ab_data)
+    tau_vec_data = vec.(tau_data)
+    vol_vec_data = vec.(vol_data)
+
+    pst = model(ab_vec_data, tau_vec_data, vol_vec_data, args...);
+    pst()
+    println("Starting Inference")
+    samples = sample(pst, NUTS(;adtype=adbackend), MCMCSerial(), n_samples, n_chains)
+    println("Number of Divergences: $(sum(samples[:numerical_error]))")
+    display(summarize(samples))
 end
 
 end

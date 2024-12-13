@@ -2,6 +2,7 @@ module SimulationUtils
 
 using DifferentialEquations: ODEProblem, ODEFunction, solve, Tsit5, remake,
                              EnsembleProblem
+using SciMLBase: successful_retcode
 using CSV: read
 using DataFrames: DataFrame
 using DrWatson: projectdir, datadir
@@ -152,5 +153,38 @@ function simulate_amyloid(us::Vector{Vector{Float64}}, u0::Vector{Float64}, ui::
                           as, ts::Vector{Vector{Float64}})
         [simulate_amyloid(u, u0, ui, a, t) for (u, a, t) in zip(us, as, ts)]
 end
+
+function make_atn_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times)
+    function prob_func(prob,i,repeat)
+        remake(prob, u0=initial_conditions[i], 
+                     p=[α_a[i], ρ_t[i], α_t[i], β, η[i]], saveat=_times[i])
+    end
+end
+
+function atn_output_func(sol,i)
+    (sol,false)
+end
+
+function split_sols_ensemble(esol, ab_idx, tau_idx)
+    d = [[vec(s[1:72, a_idx]), vec(s[73:144, t_idx]), vec(s[145:216, t_idx])] 
+          for (s, a_idx, t_idx) in zip(esol, ab_idx, tau_idx)]
+    ab = reduce(vcat, [_d[1] for _d in d])
+    tau = reduce(vcat, [_d[2] for _d in d])
+    vol = reduce(vcat, [_d[3] for _d in d])     
+    return ab, tau, vol
+end
+
+function split_sols_serial(s, a_idx, t_idx)
+    vec(s[1:72, a_idx]), vec(s[73:144, t_idx]), vec(s[145:216, t_idx])
+end
+
+function get_retcodes(es)
+    [successful_retcode(sol) for sol in es]
+end
+
+function success_condition(retcodes)
+    allequal(retcodes) && retcodes[1] == 1
+end
+
 
 end

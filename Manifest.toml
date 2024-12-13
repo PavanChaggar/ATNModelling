@@ -6,11 +6,15 @@ project_hash = "c27c7979901044a5204d79302ae727d0f0629a53"
 
 [[deps.ADNIDatasets]]
 deps = ["CSV", "DataFrames", "Dates", "Setfield"]
-git-tree-sha1 = "0e7f4b75edf0b78cbfcf2de1d0f11c9dd0c4f72e"
+git-tree-sha1 = "9795917686c78664b20d9be647dc858adf907536"
 repo-rev = "main"
 repo-url = "https://github.com/PavanChaggar/ADNIDatasets.jl.git"
 uuid = "3276ce4d-5fec-4d11-86fe-35d359dbefae"
 version = "0.1.0"
+weakdeps = ["ColorSchemes", "Colors", "Connectomes", "Makie"]
+
+    [deps.ADNIDatasets.extensions]
+    ADNIDashboardExt = ["Makie", "Connectomes", "Colors", "ColorSchemes"]
 
 [[deps.ADTypes]]
 git-tree-sha1 = "72af59f5b8f09faee36b4ec48e014a79210f2f4f"
