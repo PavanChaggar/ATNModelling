@@ -11,6 +11,7 @@ using DrWatson: projectdir, datadir
 using CSV, DataFrames
 using SciMLBase: successful_retcode
 using DifferentialEquations, Turing, LinearAlgebra
+using Random
 # --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
@@ -77,6 +78,7 @@ ab_vec_data = vectorise(ab_suvr)
 tau_vec_data = vectorise(tau_suvr)
 vol_vec_data = vectorise(vols)
 
+Random.seed!(1234)
 pst = fit_model(ensemble_atn, ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
 
 using Serialization

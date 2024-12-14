@@ -117,7 +117,7 @@ end
     Em   ~ truncated(Normal(), lower=0)
     Es   ~ truncated(Normal(), lower=0)
     
-    β    ~ Uniform(0., 7.5)
+    β    ~ Uniform(0., 5.0)
     
     α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
