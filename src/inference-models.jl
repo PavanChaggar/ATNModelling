@@ -53,7 +53,7 @@ function fit_model(model, ab, tau, atr, args...;
     m = model(args...)
     pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
     println("Starting Inference")
-    samples = sample(pst, NUTS(;adtype=adbackend), MCMCSerial(), n_samples, n_chains)
+    samples = sample(pst, NUTS(0.8; adtype=adbackend), MCMCSerial(), n_samples, n_chains)
     println("Number of Divergences: $(sum(samples[:numerical_error]))")
     display(summarize(samples))
     return pst

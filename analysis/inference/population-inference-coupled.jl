@@ -79,7 +79,10 @@ tau_vec_data = vectorise(tau_suvr)
 vol_vec_data = vectorise(vols)
 
 Random.seed!(1234)
-pst = fit_model(ensemble_atn, ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
+n_samples = 1000
+n_chains = 4
+pst = fit_model(ensemble_atn, ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_tidx, tau_tidx, n_subjects; 
+                n_samples=1000, n_chains=4)
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-test-truncated-normal.jls"), pst)
+serialize(projectdir("output/chains/population-atn/pst-samples-truncated-normal-$(n_chains)x$(n_samples).jls"), pst)

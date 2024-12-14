@@ -11,6 +11,7 @@ using DrWatson: projectdir, datadir
 using CSV, DataFrames
 using SciMLBase: successful_retcode
 using DifferentialEquations, Turing, LinearAlgebra
+using Random
 # --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
@@ -92,15 +93,18 @@ ab_vec_data = vectorise(ab_suvr)
 tau_vec_data = vectorise(tau_suvr)
 vol_vec_data = vectorise(vols)
 
-m = ensemble_atn(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
+Random.seed!(1234)
 
+m = ensemble_atn(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
 pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data, β=fitted_model.param[1],);
 pst()
 
+n_samples = 1000
+n_chains = 4
 println("Starting Inference")
-samples = sample(pst, NUTS(), MCMCSerial(), 1000, 1)
+samples = sample(pst, NUTS(0.8), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-test-truncated-normal-fixed.jls"), pst)
+serialize(projectdir("output/chains/population-atn/pst-samples-truncated-normal-fixed-$(n_chains)x$(n_samples).jls"), pst)
