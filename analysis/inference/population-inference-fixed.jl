@@ -107,4 +107,4 @@ println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-truncated-normal-fixed-$(n_chains)x$(n_samples).jls"), pst)
+serialize(projectdir("output/chains/population-atn/pst-samples-truncated-normal-fixed-$(n_chains)x$(n_samples).jls"), samples)

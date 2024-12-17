@@ -56,7 +56,7 @@ function fit_model(model, ab, tau, atr, args...;
     samples = sample(pst, NUTS(0.8; adtype=adbackend), MCMCSerial(), n_samples, n_chains)
     println("Number of Divergences: $(sum(samples[:numerical_error]))")
     display(summarize(samples))
-    return pst
+    return samples
 end
 
 """
