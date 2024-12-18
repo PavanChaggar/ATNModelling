@@ -85,4 +85,4 @@ pst = fit_model(ensemble_atn, ab_vec_data, tau_vec_data, vol_vec_data, prob, ini
                 n_samples=1000, n_chains=4)
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-truncated-normal-$(n_chains)x$(n_samples).jls"), pst)
+serialize(projectdir("output/chains/population-atn/pst-samples-normal-$(n_chains)x$(n_samples).jls"), pst)
