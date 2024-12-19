@@ -3,7 +3,7 @@ using ATNModelling.SimulationUtils: make_prob, make_atn_feedback_model,
                                     load_ab_params, load_tau_params
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names
 using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
-using ATNModelling.InferenceModels: fit_model, ensemble_atn, serial_atn, fit_serial_atn
+using ATNModelling.InferenceModels: fit_model, ensemble_atn_truncated
 
 using Connectomes: laplacian_matrix, get_label
 using ADNIDatasets: ADNIDataset, get_id, get_dates, get_initial_conditions, calc_suvr, get_vol, get_times
