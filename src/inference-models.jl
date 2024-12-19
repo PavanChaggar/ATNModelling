@@ -168,7 +168,7 @@ end
     
     β    ~ Uniform(0., 5.0)
     
-    α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
+    α_a  ~ filldist(Normal(Am_a, As_a), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
     α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
     η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
