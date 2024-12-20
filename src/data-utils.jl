@@ -293,7 +293,7 @@ function calc_times(ab::ADNIDataset, tau::ADNIDataset)
     return ab_times, tau_times
 end
 
-function align_data(ab_data, tau_data)
+function align_data(ab_data, tau_data; min_tau_scans=3)
     pos_ids = get_id.(tau_data)
     ab_tau_pos = filter(x -> get_id(x) ∈ pos_ids, ab_data)
     ab_tau_pos_ids = get_id.(ab_tau_pos)
@@ -313,7 +313,7 @@ function align_data(ab_data, tau_data)
             if idx isa Nothing
                 continue
             else
-                if length(at[idx:end]) > 1 && length(tt[i:end]) > 2
+                if length(at[idx:end]) > 1 && length(tt[i:end]) >= min_tau_scans
                     push!(sub_idx, j)
                     push!(ab_idx, idx)
                     push!(tau_idx, i)
