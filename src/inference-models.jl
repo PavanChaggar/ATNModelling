@@ -3,7 +3,7 @@ module InferenceModels
 using Turing
 using LinearAlgebra: I
 using ATNModelling.SimulationUtils: resimulate, simulate_amyloid, 
-                   make_atn_prob_func, atn_output_func, split_sols_ensemble, split_sols_serial,
+                   make_atn_prob_func, make_atn_feedback_prob_func, atn_output_func, split_sols_ensemble, split_sols_serial,
                    success_condition, get_retcodes
 using SciMLBase: successful_retcode
 using DifferentialEquations: ODEProblem, EnsembleProblem, Tsit5, solve, remake
@@ -52,11 +52,12 @@ function fit_model(model, ab, tau, atr, args...;
                     n_samples=1000, n_chains=1, adbackend=AutoForwardDiff(chunksize=0))
     m = model(args...)
     pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
+    pst()
     println("Starting Inference")
-    samples = sample(pst, NUTS(0.8; adtype=adbackend), MCMCSerial(), n_samples, n_chains)
-    println("Number of Divergences: $(sum(samples[:numerical_error]))")
-    display(summarize(samples))
-    return samples
+    # samples = sample(pst, NUTS(0.8; adtype=adbackend), MCMCSerial(), n_samples, n_chains)
+    # println("Number of Divergences: $(sum(samples[:numerical_error]))")
+    # display(summarize(samples))
+    # return samples
 end
 
 """
@@ -126,6 +127,56 @@ end
 
     ensemble_prob = EnsembleProblem(prob, 
                                     prob_func=make_atn_prob_func(inits, α_a, ρ_t, α_t, β, η, times), 
+                                    output_func=atn_output_func)
+    
+    _esol = solve(ensemble_prob,
+                    Tsit5(),
+		            verbose=false,
+                    abstol = 1e-6, 
+                    reltol = 1e-6, 
+                    trajectories=n)
+
+    if !success_condition(get_retcodes(_esol))
+        Turing.@addlogprob! -Inf
+        println(findall(x -> x == 0, get_retcodes(_esol)))
+        println("failed")
+        return nothing
+    end
+    ab_preds, tau_preds, vol_preds =  split_sols_ensemble(_esol, ab_tidx, tau_tidx)
+    
+    ab_data ~ MvNormal(ab_preds, σ_a^2 * I)
+    tau_data ~ MvNormal(tau_preds, σ_t^2 * I)
+    vol_data ~ MvNormal(vol_preds, σ_v^2 * I) 
+end
+
+
+@model function ensemble_atn_feedback_truncated(prob, inits, times, ab_tidx, tau_tidx, n)
+    σ_a  ~ InverseGamma(2,3)
+    σ_t  ~ InverseGamma(2,3)
+    σ_v  ~ InverseGamma(2,3)
+    
+    Am_a ~ truncated(Normal(), lower=0)
+    As_a ~ truncated(Normal(), lower=0)
+
+    Pm_t ~ truncated(Normal(), lower=0)
+    Ps_t ~ truncated(Normal(), lower=0)
+    
+    Am_t ~ truncated(Normal(), lower=0)
+    As_t ~ truncated(Normal(), lower=0)
+
+    Em   ~ truncated(Normal(), lower=0)
+    Es   ~ truncated(Normal(), lower=0)
+    
+    β    ~ Uniform(0., 5.0)
+    δ    ~ Uniform(0.0, 1.0)
+
+    α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
+    ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
+    α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
+    η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
+
+    ensemble_prob = EnsembleProblem(prob, 
+                                    prob_func=make_atn_feedback_prob_func(inits, α_a, ρ_t, α_t, β, η, δ, times), 
                                     output_func=atn_output_func)
     
     _esol = solve(ensemble_prob,

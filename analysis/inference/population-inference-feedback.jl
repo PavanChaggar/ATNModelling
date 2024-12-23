@@ -3,7 +3,7 @@ using ATNModelling.SimulationUtils: make_prob, make_atn_feedback_model,
                                     load_ab_params, load_tau_params
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names
 using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
-using ATNModelling.InferenceModels: fit_model, ensemble_atn_truncated
+using ATNModelling.InferenceModels: fit_model, ensemble_atn_truncated, ensemble_atn_feedback_truncated
 
 using Connectomes: laplacian_matrix, get_label
 using ADNIDatasets: ADNIDataset, get_id, get_dates, get_initial_conditions, calc_suvr, get_vol, get_times
@@ -66,11 +66,9 @@ vol_inits = [vol[:,1] for vol in vols]
 atn_model = make_atn_feedback_model(u0, ui, v0, part, L)
 prob = make_prob(atn_model, 
           [ab_inits[1]; tau_inits[1]; vol_inits[1]], 
-          (0.0,7.5), [1.0,1.0,1.0,3.5,0.1])
-
+          (0.0,7.5), [1.0,1.0,1.0,3.5,0.1,0.75])
 inits = [[ab; tau; vol] for (ab, tau, vol) in zip(ab_inits, tau_inits, vol_inits)]
 n_subjects = length(ab)
-
 # ------------------------------------------------------------------
 # Inference
 # ------------------------------------------------------------------
@@ -80,9 +78,9 @@ vol_vec_data = vectorise(vols)
 
 Random.seed!(1234)
 n_samples = 1000
-n_chains = 4
-pst = fit_model(ensemble_atn_truncated, ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_tidx, tau_tidx, n_subjects; 
-                n_samples=1000, n_chains=4)
+n_chains = 1
+pst = fit_model(ensemble_atn_feedback_truncated, ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_tidx, tau_tidx, n_subjects; 
+                n_samples=n_samples, n_chains=n_chains)
 
 using Serialization
 serialize(projectdir("output/chains/population-atn/pst-samples-truncated-normal-feedback-$(n_chains)x$(n_samples).jls"), pst)
