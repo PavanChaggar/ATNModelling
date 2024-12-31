@@ -36,9 +36,9 @@ ab_data = ADNIDataset(ab_data_df, dktnames; min_scans=2, reference_region="COMPO
 # Tau data 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
 tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, tau_data_df);
-tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=2)
+tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
 
-ab, tau = align_data(ab_data, tau_data; min_tau_scans=2)
+ab, tau = align_data(ab_data, tau_data; min_tau_scans=3)
 
 ab_times = get_times.(ab)
 tau_times = get_times.(tau)
@@ -80,9 +80,9 @@ vol_vec_data = vectorise(vols)
 
 Random.seed!(1234)
 n_samples = 1000
-n_chains = 4
+n_chains = 1
 pst = fit_model(ensemble_atn_truncated, ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_tidx, tau_tidx, n_subjects; 
-                n_samples=1000, n_chains=4)
+                n_samples=n_samples, n_chains=n_chains)
 
-using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-normal-$(n_chains)x$(n_samples)-2scans.jls"), pst)
+# using Serialization
+# serialize(projectdir("output/chains/population-atn/pst-samples-normal-$(n_chains)x$(n_samples).jls"), pst)
