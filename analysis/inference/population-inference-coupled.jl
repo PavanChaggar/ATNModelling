@@ -3,7 +3,7 @@ using ATNModelling.SimulationUtils: make_prob, make_atn_model,
                                     load_ab_params, load_tau_params
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names
 using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
-using ATNModelling.InferenceModels: fit_model, ensemble_atn_truncated
+using ATNModelling.InferenceModels: fit_model, ensemble_atn_truncated, serial_atn, fit_serial_atn
 
 using Connectomes: laplacian_matrix, get_label
 using ADNIDatasets: ADNIDataset, get_id, get_dates, get_initial_conditions, calc_suvr, get_vol, get_times
@@ -11,7 +11,9 @@ using DrWatson: projectdir, datadir
 using CSV, DataFrames
 using SciMLBase: successful_retcode
 using DifferentialEquations, Turing, LinearAlgebra
+using ADTypes: AutoZygote
 using Random
+using SciMLSensitivity
 # --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
@@ -47,6 +49,7 @@ ts = [sort(unique([a; t])) for (a, t) in zip(ab_times, tau_times)]
 ab_tidx = get_time_idx(ab_times, ts)
 tau_tidx = get_time_idx(tau_times, ts)
 
+@assert get_id.(ab) == get_id.(tau)
 @assert allequal([allequal(ab_times[i] .== ts[i][ab_tidx[i]]) for i in 1:length(ab)])
 @assert allequal([allequal(tau_times[i] .== ts[i][tau_tidx[i]]) for i in 1:length(tau)])
 
@@ -74,15 +77,15 @@ n_subjects = length(ab)
 # ------------------------------------------------------------------
 # Inference
 # ------------------------------------------------------------------
-ab_vec_data = vectorise(ab_suvr)
-tau_vec_data = vectorise(tau_suvr)
-vol_vec_data = vectorise(vols)
+# ab_vec_data = vectorise(ab_suvr)
+# tau_vec_data = vectorise(tau_suvr)
+# vol_vec_data = vectorise(vols)
 
 Random.seed!(1234)
 n_samples = 1000
 n_chains = 1
-pst = fit_model(ensemble_atn_truncated, ab_vec_data, tau_vec_data, vol_vec_data, prob, inits, ts, ab_tidx, tau_tidx, n_subjects; 
-                n_samples=n_samples, n_chains=n_chains)
+pst = fit_serial_atn(serial_atn, vec.(ab_suvr), vec.(tau_suvr), vec.(vols, ), 
+                     prob, inits, ts, ab_tidx, tau_tidx, n_subjects;
+                     n_samples=n_samples, n_chains=n_chains, adbackend=AutoZygote())
 
-using Serialization
 serialize(projectdir("output/chains/population-atn/pst-samples-normal-$(n_chains)x$(n_samples)-2scans.jls"), pst)

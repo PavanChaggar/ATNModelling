@@ -8,6 +8,7 @@ using ATNModelling.SimulationUtils: resimulate, simulate_amyloid,
 using SciMLBase: successful_retcode
 using DifferentialEquations: ODEProblem, EnsembleProblem, Tsit5, solve, remake
 using ADTypes: AutoForwardDiff
+using SciMLSensitivity: InterpolatingAdjoint, ReverseDiffVJP
 
 """
     atn_inference(prob::ODEProblem, t)
@@ -118,7 +119,7 @@ end
     Em   ~ truncated(Normal(), lower=0)
     Es   ~ truncated(Normal(), lower=0)
     
-    β    ~ truncated(Normal(3.5, 2.), lower=0)
+    β    ~ truncated(Normal(3.5, 1.), lower=0)
     
     α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
@@ -314,7 +315,7 @@ end
     Em   ~ truncated(Normal(), lower=0)
     Es   ~ truncated(Normal(), lower=0)
     
-    β    ~ truncated(Normal(3, 1), lower=0)
+    β    ~ truncated(Normal(3.5, 1.), lower=0)
 
     α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
@@ -323,19 +324,20 @@ end
 
     for i in eachindex(1:n)
         _prob = remake(prob, u0 = inits[i], p = [α_a[i], ρ_t[i], α_t[i], β, η[i]])
-        _sol = solve(_prob, Tsit5(), abstol = 1e-6, reltol = 1e-6, saveat=times[i])
+        _sol = solve(_prob, Tsit5(), abstol = 1e-6, reltol = 1e-6, saveat=times[i],
+        sensealg=InterpolatingAdjoint(autojacvec=ReverseDiffVJP(true)))
         if !successful_retcode(_sol)
             Turing.@addlogprob! -Inf
             println("failed")
             break
         end
         ab_preds, tau_preds, vol_preds = split_sols_serial(_sol, ab_tidx[i], tau_tidx[i])
-        # ab_data[i] ~ MvNormal(ab_preds, σ_a^2 * I)
-        # tau_data[i] ~ MvNormal(tau_preds, σ_t^2 * I)
-        # vol_data[i] ~ MvNormal(vol_preds, σ_v^2 * I) 
-        Turing.@addlogprob! loglikelihood(MvNormal(ab_preds, σ_a^2 * I),  ab_data[i])
-        Turing.@addlogprob! loglikelihood(MvNormal(tau_preds, σ_t^2 * I),  tau_data[i])
-        Turing.@addlogprob! loglikelihood(MvNormal(vol_preds, σ_v^2 * I),  vol_data[i])
+        ab_data[i] ~ MvNormal(ab_preds, σ_a^2 * I)
+        tau_data[i] ~ MvNormal(tau_preds, σ_t^2 * I)
+        vol_data[i] ~ MvNormal(vol_preds, σ_v^2 * I) 
+        # Turing.@addlogprob! loglikelihood(MvNormal(ab_preds, σ_a^2 * I),  ab_data[i])
+        # Turing.@addlogprob! loglikelihood(MvNormal(tau_preds, σ_t^2 * I),  tau_data[i])
+        # Turing.@addlogprob! loglikelihood(MvNormal(vol_preds, σ_v^2 * I),  vol_data[i])
         
     end
 end
