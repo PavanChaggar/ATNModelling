@@ -89,6 +89,25 @@ function make_atn_feedback_model(u0, ui, v0, part, L)
     return return ODEFunction(atn)
 end
 
+function make_atn_fixed_model(u0, ui, v0, κ, β, L)
+    function atn(D, x, p, t;)
+        u = @view x[1:72]
+        v = @view x[73:144]
+        a = @view x[145:216]
+
+        α_a, ρ_t, α_t, η = p
+
+        _ui = (ui .- u0) #.* (1 .- a)
+        _vi = ((part .+ (β .* (u .- u0))) .- v0) #.* ( 1 .- a )
+        _vi_max = (κ .+ (β .* (ui .- u0)))
+        D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
+        D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
+        D[145:216] .= η .* concentration.(v, v0, _vi_max) .* ( 1 .- a )
+        #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
+        return nothing
+    end
+    return return ODEFunction(atn)
+end
 
 """
     make_prob(model::ODEFunction, inits, tspan, params)
@@ -178,6 +197,13 @@ function make_atn_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times
     function prob_func(prob,i,repeat)
         remake(prob, u0=initial_conditions[i], 
                      p=[α_a[i], ρ_t[i], α_t[i], β, η[i]], saveat=_times[i])
+    end
+end
+
+function make_atn_fixed_prob_func(initial_conditions, α_a, ρ_t, α_t, κ, β, η, _times)
+    function prob_func(prob,i,repeat)
+        remake(prob, u0=initial_conditions[i], 
+                     p=[α_a[i], ρ_t[i], α_t[i], κ, β, η[i]], saveat=_times[i])
     end
 end
 

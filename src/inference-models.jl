@@ -4,7 +4,7 @@ using Turing
 using LinearAlgebra: I
 using ATNModelling.SimulationUtils: resimulate, simulate_amyloid, 
                    make_atn_prob_func, make_atn_feedback_prob_func, atn_output_func, split_sols_ensemble, split_sols_serial,
-                   success_condition, get_retcodes
+                   success_condition, get_retcodes, make_atn_fixed_prob_func
 using SciMLBase: successful_retcode
 using DifferentialEquations: ODEProblem, EnsembleProblem, Tsit5, solve, remake
 using ADTypes: AutoForwardDiff
@@ -149,6 +149,55 @@ end
     vol_data ~ MvNormal(vol_preds, σ_v^2 * I) 
 end
 
+
+@model function ensemble_atn_truncated_fixed(prob, inits, times, ab_tidx, tau_tidx, n)
+    σ_a  ~ InverseGamma(2,3)
+    σ_t  ~ InverseGamma(2,3)
+    σ_v  ~ InverseGamma(2,3)
+    
+    Am_a ~ truncated(Normal(), lower=0)
+    As_a ~ truncated(Normal(), lower=0)
+
+    Pm_t ~ truncated(Normal(), lower=0)
+    Ps_t ~ truncated(Normal(), lower=0)
+    
+    Am_t ~ truncated(Normal(), lower=0)
+    As_t ~ truncated(Normal(), lower=0)
+
+    Em   ~ truncated(Normal(), lower=0)
+    Es   ~ truncated(Normal(), lower=0)
+
+    α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
+    ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
+    α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
+    η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
+
+    κ    ~ truncated(Normal(), lower=0)
+    β    ~ truncated(Normal(3.5, 1.), lower=0)
+
+    ensemble_prob = EnsembleProblem(prob, 
+                                    prob_func=make_atn_fixed_prob_func(inits, α_a, ρ_t, α_t, κ, β, η, times), 
+                                    output_func=atn_output_func)
+    
+    _esol = solve(ensemble_prob,
+                    Tsit5(),
+		            verbose=false,
+                    abstol = 1e-6, 
+                    reltol = 1e-6, 
+                    trajectories=n)
+
+    if !success_condition(get_retcodes(_esol))
+        Turing.@addlogprob! -Inf
+        println(findall(x -> x == 0, get_retcodes(_esol)))
+        println("failed")
+        return nothing
+    end
+    ab_preds, tau_preds, vol_preds =  split_sols_ensemble(_esol, ab_tidx, tau_tidx)
+    
+    ab_data ~ MvNormal(ab_preds, σ_a^2 * I)
+    tau_data ~ MvNormal(tau_preds, σ_t^2 * I)
+    vol_data ~ MvNormal(vol_preds, σ_v^2 * I) 
+end
 
 @model function ensemble_atn_feedback_truncated(prob, inits, times, ab_tidx, tau_tidx, n)
     σ_a  ~ InverseGamma(2,3)
