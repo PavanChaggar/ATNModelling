@@ -332,12 +332,12 @@ end
             break
         end
         ab_preds, tau_preds, vol_preds = split_sols_serial(_sol, ab_tidx[i], tau_tidx[i])
-        ab_data[i] ~ MvNormal(ab_preds, σ_a^2 * I)
-        tau_data[i] ~ MvNormal(tau_preds, σ_t^2 * I)
-        vol_data[i] ~ MvNormal(vol_preds, σ_v^2 * I) 
-        # Turing.@addlogprob! loglikelihood(MvNormal(ab_preds, σ_a^2 * I),  ab_data[i])
-        # Turing.@addlogprob! loglikelihood(MvNormal(tau_preds, σ_t^2 * I),  tau_data[i])
-        # Turing.@addlogprob! loglikelihood(MvNormal(vol_preds, σ_v^2 * I),  vol_data[i])
+        # ab_data[i] ~ MvNormal(ab_preds, σ_a^2 * I)
+        # tau_data[i] ~ MvNormal(tau_preds, σ_t^2 * I)
+        # vol_data[i] ~ MvNormal(vol_preds, σ_v^2 * I) 
+        Turing.@addlogprob! loglikelihood(MvNormal(ab_preds, σ_a^2 * I),  ab_data[i])
+        Turing.@addlogprob! loglikelihood(MvNormal(tau_preds, σ_t^2 * I),  tau_data[i])
+        Turing.@addlogprob! loglikelihood(MvNormal(vol_preds, σ_v^2 * I),  vol_data[i])
         
     end
 end
