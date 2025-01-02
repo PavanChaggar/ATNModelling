@@ -78,15 +78,15 @@ n_subjects = length(ab)
 # ------------------------------------------------------------------
 # Inference
 # ------------------------------------------------------------------
-# ab_vec_data = vectorise(ab_suvr)
-# tau_vec_data = vectorise(tau_suvr)
-# vol_vec_data = vectorise(vols)
+ab_vec_data = vectorise(ab_suvr)
+tau_vec_data = vectorise(tau_suvr)
+vol_vec_data = vectorise(vols)
 
 Random.seed!(1234)
 n_samples = 1000
 n_chains = 1
-pst = fit_serial_atn(serial_atn, vec.(ab_suvr), vec.(tau_suvr), vec.(vols, ), 
+pst = fit_model(ensemble_atn_truncated, ab_vec_data, tau_vec_data, vol_vec_data, 
                      prob, inits, ts, ab_tidx, tau_tidx, n_subjects;
-                     n_samples=n_samples, n_chains=n_chains, adbackend=AutoZygote())
+                     n_samples=n_samples, n_chains=n_chains)
 
-serialize(projectdir("output/chains/population-atn/pst-samples-truncated-normal-$(n_chains)x$(n_samples).jls"), pst)
+serialize(projectdir("output/chains/population-atn/pst-samples-lognormal-$(n_chains)x$(n_samples).jls"), pst)

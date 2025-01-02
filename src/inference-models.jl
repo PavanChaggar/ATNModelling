@@ -107,16 +107,16 @@ end
     σ_t  ~ InverseGamma(2,3)
     σ_v  ~ InverseGamma(2,3)
     
-    Am_a ~ truncated(Normal(), lower=0)
+    Am_a ~ LogNormal()
     As_a ~ truncated(Normal(), lower=0)
 
-    Pm_t ~ truncated(Normal(), lower=0)
+    Pm_t ~ LogNormal()
     Ps_t ~ truncated(Normal(), lower=0)
     
-    Am_t ~ truncated(Normal(), lower=0)
+    Am_t ~ LogNormal()
     As_t ~ truncated(Normal(), lower=0)
 
-    Em   ~ truncated(Normal(), lower=0)
+    Em   ~ LogNormal()
     Es   ~ truncated(Normal(), lower=0)
     
     β    ~ truncated(Normal(3.5, 1.), lower=0)
