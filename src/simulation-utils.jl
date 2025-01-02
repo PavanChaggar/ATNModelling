@@ -89,16 +89,16 @@ function make_atn_feedback_model(u0, ui, v0, part, L)
     return return ODEFunction(atn)
 end
 
-function make_atn_fixed_model(u0, ui, v0, κ, β, L)
+function make_atn_fixed_model(u0, ui, v0, L)
     function atn(D, x, p, t;)
         u = @view x[1:72]
         v = @view x[73:144]
         a = @view x[145:216]
 
-        α_a, ρ_t, α_t, η = p
+        α_a, ρ_t, α_t, κ, β, η = p
 
         _ui = (ui .- u0) #.* (1 .- a)
-        _vi = ((part .+ (β .* (u .- u0))) .- v0) #.* ( 1 .- a )
+        _vi = ((κ .+ (β .* (u .- u0))) .- v0) #.* ( 1 .- a )
         _vi_max = (κ .+ (β .* (ui .- u0)))
         D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
         D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))

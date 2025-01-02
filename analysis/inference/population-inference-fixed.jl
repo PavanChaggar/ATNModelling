@@ -63,11 +63,11 @@ total_vol_norm = [tp ./ sum(tp, dims=1) for tp in tau_pos_vol]
 vols = [clamp.(1 .- (vol ./ vol[:,1]), 0, 1) for vol in total_vol_norm]
 vol_inits = [vol[:,1] for vol in vols]
 
-atn_model = make_atn_model(u0, ui, v0, part, L)
+atn_model = make_atn_fixed_model(u0, ui, v0, L)
 prob = make_prob(atn_model, 
           [ab_inits[1]; tau_inits[1]; vol_inits[1]], 
-          (0.0,7.5), [1.0,1.0,1.0,3.5,1.0])
-
+          (0.0,7.5), [1.0,1.0,1.0,1.0, 3.5,1.0])
+solve(prob, Tsit5())
 inits = [[ab; tau; vol] for (ab, tau, vol) in zip(ab_inits, tau_inits, vol_inits)]
 n_subjects = length(ab)
 
@@ -76,6 +76,19 @@ n_subjects = length(ab)
 # ------------------------------------------------------------------
 using LsqFit
 
+# linearmodel(x, p) = part .+ p[1] .* x
+# fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0])
+# println("params = $(fitted_model.param)")
+# using CairoMakie
+# begin
+#     f = Figure(size=(600, 500))
+#     ax = Axis(f[1,1])
+#     CairoMakie.ylims!(ax, 0.0, 5.0)
+#     CairoMakie.xlims!(ax, 0.0, 5.0)
+#     CairoMakie.scatter!(part .+ fitted_model.param[1] .* (ui .- u0), vi)    
+#     f
+# end
+
 linearmodel(x, p) = p[1] .+ p[2] .* x
 fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0, 1.0])
 println("params = $(fitted_model.param)")
@@ -83,9 +96,10 @@ println("params = $(fitted_model.param)")
 # begin
 #     f = Figure(size=(600, 500))
 #     ax = Axis(f[1,1])
-#     ylims!(ax, 0.0, 5.0)
-#     xlims!(ax, 0.0, 5.0)
-#     scatter!(fitted_model.param[1] .+ fitted_model.param[1] .* (ui .- u0), vi)    
+#     CairoMakie.ylims!(ax, 0.0, 5.0)
+#     CairoMakie.xlims!(ax, 0.0, 1.0)
+#     CairoMakie.scatter!((ui .- u0), vi)    
+#     CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ fitted_model.param[2] .* (0:0.1:1))
 #     f
 # end
 
@@ -96,7 +110,8 @@ vol_vec_data = vectorise(vols)
 Random.seed!(1234)
 
 m = ensemble_atn_truncated_fixed(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
-pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data, κ = fitted_model.param[1], β=fitted_model.param[2],);
+pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,  
+            κ=fitted_model.param[1], β=fitted_model.param[2],);
 pst()
 
 n_samples = 1000
