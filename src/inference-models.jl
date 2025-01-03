@@ -108,16 +108,16 @@ end
     σ_v  ~ InverseGamma(2,3)
     
     Am_a ~ LogNormal()
-    As_a ~ truncated(Normal(), lower=0)
+    As_a ~ truncated(Normal(0, 5), lower=0)
 
     Pm_t ~ LogNormal()
-    Ps_t ~ truncated(Normal(), lower=0)
+    Ps_t ~ truncated(Normal(0, 5), lower=0)
     
     Am_t ~ LogNormal()
-    As_t ~ truncated(Normal(), lower=0)
+    As_t ~ truncated(Normal(0, 5), lower=0)
 
     Em   ~ LogNormal()
-    Es   ~ truncated(Normal(), lower=0)
+    Es   ~ truncated(Normal(0, 5), lower=0)
     
     β    ~ truncated(Normal(3.5, 1.), lower=0)
     
@@ -133,8 +133,8 @@ end
     _esol = solve(ensemble_prob,
                     Tsit5(),
 		            verbose=false,
-                    abstol = 1e-6, 
-                    reltol = 1e-6, 
+                    abstol = 1e-9, 
+                    reltol = 1e-9, 
                     trajectories=n)
 
     if !success_condition(get_retcodes(_esol))
