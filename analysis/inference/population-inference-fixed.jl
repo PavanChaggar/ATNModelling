@@ -85,23 +85,25 @@ using LsqFit
 #     ax = Axis(f[1,1])
 #     CairoMakie.ylims!(ax, 0.0, 5.0)
 #     CairoMakie.xlims!(ax, 0.0, 5.0)
-#     CairoMakie.scatter!(part .+ fitted_model.param[1] .* (ui .- u0), vi)    
+#     CairoMakie.scatter!(part .+ fitted_model.param[1] .* (ui .- u0), vi) 
+#     CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ fitted_model.param[2] .* (0:0.1:1))
+   
 #     f
 # end
 
 linearmodel(x, p) = p[1] .+ p[2] .* x
 fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0, 1.0])
 println("params = $(fitted_model.param)")
-# using CairoMakie
-# begin
-#     f = Figure(size=(600, 500))
-#     ax = Axis(f[1,1])
-#     CairoMakie.ylims!(ax, 0.0, 5.0)
-#     CairoMakie.xlims!(ax, 0.0, 1.0)
-#     CairoMakie.scatter!((ui .- u0), vi)    
-#     CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ fitted_model.param[2] .* (0:0.1:1))
-#     f
-# end
+using CairoMakie
+begin
+    f = Figure(size=(600, 500))
+    ax = Axis(f[1,1])
+    CairoMakie.ylims!(ax, 0.0, 5.0)
+    CairoMakie.xlims!(ax, 0.0, 1.0)
+    CairoMakie.scatter!((ui .- u0), vi)    
+    CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ fitted_model.param[2] .* (0:0.1:1))
+    f
+end
 
 ab_vec_data = vectorise(ab_suvr)
 tau_vec_data = vectorise(tau_suvr)
