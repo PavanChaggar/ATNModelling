@@ -55,7 +55,8 @@ function fit_model(model, ab, tau, atr, args...;
     pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
     pst()
     println("Starting Inference")
-    samples = sample(pst, NUTS(0.8; adtype=adbackend), MCMCSerial(), n_samples, n_chains)
+    samples = sample(pst, NUTS(0.8; metricT=AdvancedHMC.DenseEuclideanMetric, adtype=adbackend), 
+    MCMCSerial(), n_samples, n_chains)
     println("Number of Divergences: $(sum(samples[:numerical_error]))")
     display(summarize(samples))
     return samples
@@ -119,7 +120,7 @@ end
     Em   ~ LogNormal()
     Es   ~ truncated(Normal(0, 5), lower=0)
     
-    β    ~ truncated(Normal(3.5, 1.), lower=0)
+    β    ~ truncated(Normal(3.5, 0.5), lower=0)
     
     α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
