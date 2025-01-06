@@ -9,7 +9,7 @@ using SciMLBase: successful_retcode
 using DifferentialEquations: ODEProblem, EnsembleProblem, Tsit5, solve, remake
 using ADTypes: AutoForwardDiff
 using SciMLSensitivity: InterpolatingAdjoint, ReverseDiffVJP
-
+using AdvancedHMC: DenseEuclideanMetric
 """
     atn_inference(prob::ODEProblem, t)
 
@@ -55,7 +55,7 @@ function fit_model(model, ab, tau, atr, args...;
     pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
     pst()
     println("Starting Inference")
-    samples = sample(pst, NUTS(0.8; metricT=AdvancedHMC.DenseEuclideanMetric, adtype=adbackend), 
+    samples = sample(pst, NUTS(0.8; metricT=DenseEuclideanMetric, adtype=adbackend), 
     MCMCSerial(), n_samples, n_chains)
     println("Number of Divergences: $(sum(samples[:numerical_error]))")
     display(summarize(samples))
