@@ -57,7 +57,7 @@ begin
     CairoMakie.activate!()
     cols = Makie.wong_colors()
 
-    node = 29
+    node = 71
     roi_df = baseline_difference(data[ts_idx], node)
     roi_vals = roi_df.ab_suvr
 
