@@ -134,8 +134,8 @@ end
     _esol = solve(ensemble_prob,
                     Tsit5(),
 		            verbose=false,
-                    abstol = 1e-9, 
-                    reltol = 1e-9, 
+                    abstol = 1e-6, 
+                    reltol = 1e-6, 
                     trajectories=n)
 
     if !success_condition(get_retcodes(_esol))
