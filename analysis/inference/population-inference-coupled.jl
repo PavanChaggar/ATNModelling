@@ -59,7 +59,7 @@ normalise!(ab_suvr, u0, ui)
 ab_inits = [d[:,1] for d in ab_suvr]
 
 tau_suvr = calc_suvr.(tau)
-normalise!(tau_suvr, v0)
+normalise!(tau_suvr, v0, vi)
 tau_inits = [d[:,1] for d in tau_suvr]
 
 tau_pos_vol = get_vol.(tau)
