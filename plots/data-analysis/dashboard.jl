@@ -25,7 +25,7 @@ dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 _ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
 _tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
 
-ab_data_df = filter(x -> x.qc_flag==2 && x.TRACER == "FBP", _ab_data_df);
+ab_data_df = filter(x -> x.qc_flag==2, _ab_data_df);
 ab_data = ADNIDataset(ab_data_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF")
 
 # Tau data 
@@ -34,6 +34,7 @@ tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, tau_data_df);
 tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
 
 ab, tau = align_data(ab_data, tau_data)
-
+get_id.(tau)[42]
+calc_suvr.(tau)[42][35, :]
 data_dashboard(ab, fill(minimum(u0), 72), fill(maximum(ui), 72); cmap=ColorSchemes.viridis, show_mtl_threshold=false)
-data_dashboard(tau, fill(minimum(v0), 72), fill(maximum(vi), 72); cmap=ColorSchemes.viridis, show_mtl_threshold=true)
+data_dashboard(tau, v0, vi; cmap=reverse(ColorSchemes.RdYlBu), show_mtl_threshold=true)

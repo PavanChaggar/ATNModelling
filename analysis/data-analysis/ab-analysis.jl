@@ -12,10 +12,10 @@ using Polynomials: coeffs
 data_path = datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv");
 
 data_df = CSV.read(data_path, DataFrame)
-fbp_data = filter(x -> x.TRACER == "FBP", data_df)
-dropmissing!(fbp_data, :AMYLOID_STATUS_COMPOSITE_REF)
+fbb_data = filter(x -> x.TRACER == "FBB", data_df)
+dropmissing!(fbb_data, :AMYLOID_STATUS_COMPOSITE_REF)
 
-abpos_df = filter(x -> x["AMYLOID_STATUS_COMPOSITE_REF"] ∈ [0, 1], fbp_data)
+abpos_df = filter(x -> x["AMYLOID_STATUS_COMPOSITE_REF"] ∈ [0, 1], fbb_data)
 
 dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 push!(dktnames, "SUMMARY")
@@ -26,9 +26,9 @@ ab_vf = baseline_difference(data, 73)
 
 CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/ab-vector-field.csv"), ab_vf)
 
-start = 0.65
+start = 0.7
 step  = 0.05
-stop  = 1.15
+stop  = 1.1
 
 bin_df = split_data(ab_vf.ab_suvr, ab_vf.ab_diff, start, step, stop)
 CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/ab-binned-vector-field.csv"), bin_df)
@@ -41,8 +41,10 @@ writedlm(projectdir("output/analysis-derivatives/ab-derivatives/ab-polynomial-co
 #-----------------------------------------------------------------------
 # Ab integration
 #-----------------------------------------------------------------------
-xt(t) = (32.298 + 1.152 * exp(0.122 * t))/(51.483 + exp(0.122 * t))
-xt(t, p) = (32.298 + 1.152 * exp(0.122 * t))/(51.483 + exp(0.122 * t)) - p
+# xt(t) = (32.298 + 1.152 * exp(0.122 * t))/(51.483 + exp(0.122 * t))
+# xt(t, p) = (32.298 + 1.152 * exp(0.122 * t))/(51.483 + exp(0.122 * t)) - p
+xt(t) = (558.976 + 1.22711 * exp(0.1665152871392 * t))/(833.877 + exp(0.1665152871392 * t))
+xt(t, p) = (558.976 + 1.22711 * exp(0.1665152871392 * t))/(833.877 + exp(0.1665152871392 * t)) - p
 
 t_df = find_amyloid_time(xt, data);
 CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/ab-times.csv"), t_df)
@@ -50,6 +52,7 @@ CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/ab-times.csv"),
 t_df = CSV.read(projectdir("output/analysis-derivatives/ab-derivatives/ab-times.csv"), DataFrame)
 
 params = find_regional_params(data, t_df);
+
 
 u0 = [params[i].param[4] for i in 1:72]
 diffs = [params[i].param[1] for i in 1:72]
