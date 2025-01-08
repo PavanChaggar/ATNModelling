@@ -9,7 +9,7 @@ using SciMLBase: successful_retcode
 using DifferentialEquations: ODEProblem, EnsembleProblem, Tsit5, solve, remake
 using ADTypes: AutoForwardDiff
 using SciMLSensitivity: InterpolatingAdjoint, ReverseDiffVJP
-using AdvancedHMC: DenseEuclideanMetric
+
 """
     atn_inference(prob::ODEProblem, t)
 
