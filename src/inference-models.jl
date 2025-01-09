@@ -174,8 +174,8 @@ end
     α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
     η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
 
-    κ    ~ truncated(Normal(), lower=0)
-    β    ~ truncated(Normal(3.5, 1.), lower=0)
+    κ    ~ truncated(Normal(1.8, 0.1), lower=0)
+    β    ~ truncated(Normal(2.1, 0.25), lower=0)
 
     ensemble_prob = EnsembleProblem(prob, 
                                     prob_func=make_atn_fixed_prob_func(inits, α_a, ρ_t, α_t, κ, β, η, times), 

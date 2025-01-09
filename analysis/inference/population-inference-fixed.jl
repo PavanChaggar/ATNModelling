@@ -91,19 +91,19 @@ using LsqFit
 #     f
 # end
 
-linearmodel(x, p) = p[1] .+ p[2] .* x
-fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0, 1.0])
-println("params = $(fitted_model.param)")
-using CairoMakie
-begin
-    f = Figure(size=(600, 500))
-    ax = Axis(f[1,1])
-    CairoMakie.ylims!(ax, 0.0, 5.0)
-    CairoMakie.xlims!(ax, 0.0, 1.0)
-    CairoMakie.scatter!((ui .- u0), vi)    
-    CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ fitted_model.param[2] .* (0:0.1:1))
-    f
-end
+# linearmodel(x, p) = p[1] .+ p[2] .* x
+# fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0, 1.0])
+# println("params = $(fitted_model.param)")
+# using CairoMakie
+# begin
+#     f = Figure(size=(600, 500))
+#     ax = Axis(f[1,1])
+#     CairoMakie.ylims!(ax, 0.0, 5.0)
+#     CairoMakie.xlims!(ax, 0.0, 1.0)
+#     CairoMakie.scatter!((ui .- u0), vi)    
+#     CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ 3. .* (0:0.1:1))
+#     f
+# end
 
 ab_vec_data = vectorise(ab_suvr)
 tau_vec_data = vectorise(tau_suvr)
@@ -112,16 +112,17 @@ vol_vec_data = vectorise(vols)
 Random.seed!(1234)
 
 m = ensemble_atn_truncated_fixed(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
-pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,  
-            κ=fitted_model.param[1], β=fitted_model.param[2],);
+# pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,  
+#             κ=fitted_model.param[1], β=fitted_model.param[2],);
+pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,);
 pst()
 
 n_samples = 1000
 n_chains = 1
 println("Starting Inference")
-samples = sample(pst, NUTS(0.9), MCMCSerial(), n_samples, n_chains)
+samples = sample(pst, NUTS(0.8), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-lognormal-fixed-2-$(n_chains)x$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-atn/pst-samples-lognormal-fixed-0-$(n_chains)x$(n_samples).jls"), samples)
