@@ -120,7 +120,7 @@ end
     Em   ~ LogNormal()
     Es   ~ truncated(Normal(0, 1), lower=0)
     
-    β    ~ truncated(Normal(3.5, 0.25), lower=0)
+    β    ~ truncated(Normal(3.5, 0.1), lower=0., upper=5.)
     
     α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
