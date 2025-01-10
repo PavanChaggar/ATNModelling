@@ -120,7 +120,7 @@ pst()
 n_samples = 1000
 n_chains = 1
 println("Starting Inference")
-samples = sample(pst, NUTS(0.8), MCMCSerial(), n_samples, n_chains)
+samples = sample(pst, NUTS(0.9), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
