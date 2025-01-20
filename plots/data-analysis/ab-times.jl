@@ -37,11 +37,10 @@ save(projectdir("output/plots/population-analysis/ab-integrated.pdf"), fig)
 #-----------------------------------------------------------------------
 # Regional Values
 #-----------------------------------------------------------------------
-
 data_path = datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv");
 
 data_df = CSV.read(data_path, DataFrame);
-fbp_data = filter(x -> x.TRACER == "FBP", data_df);
+fbp_data = filter(x -> x.TRACER == "FBB", data_df);
 dropmissing!(fbp_data, :AMYLOID_STATUS_COMPOSITE_REF)
 abpos_df = filter(x -> x["AMYLOID_STATUS_COMPOSITE_REF"] ∈ [0, 1], fbp_data)
 dktnames = get_parcellation() |> get_cortex |> get_dkt_names;
@@ -57,7 +56,7 @@ begin
     CairoMakie.activate!()
     cols = Makie.wong_colors()
 
-    node = 71
+    node = 29
     roi_df = baseline_difference(data[ts_idx], node)
     roi_vals = roi_df.ab_suvr
 

@@ -136,8 +136,8 @@ function find_regional_params(data::ADNIDataset, t_df::DataFrame)
         ab_df = baseline_difference(data[t_idx], i)
         roi_vals = ab_df.ab_suvr
 
-        _p0 = mean(sort(roi_vals)[1:100])
-        _pi = mean(sort(roi_vals)[600:end]) .- _p0
+        _p0 = mean(sort(roi_vals)[1:20])
+        _pi = mean(sort(roi_vals)[90:end]) .- _p0
         p0 = [_pi,1.0,40.0,_p0]
         fitted_model = curve_fit(sigmoid, ts, roi_vals, p0)
         push!(params, fitted_model)
