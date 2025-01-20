@@ -13,9 +13,15 @@ using SciMLBase: successful_retcode
 using DifferentialEquations, Turing, LinearAlgebra
 using Random
 # --------------------------------------------------------------------------------
+# Script params 
+# --------------------------------------------------------------------------------
+tracer = ARGS[1]
+n_samples = parse(Int, ARGS[2])
+n_chains = parse(Int, ARGS[3])
+# --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
-u0, ui = load_ab_params()
+u0, ui = load_ab_params(tracer=tracer)
 ui_diff = ui .- u0
 v0, vi, part = load_tau_params()
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
@@ -30,7 +36,7 @@ dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 _ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
 _tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
 
-ab_data_df = filter(x -> x.qc_flag==2 && x.TRACER == "FBP", _ab_data_df);
+ab_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer, _ab_data_df);
 ab_data = ADNIDataset(ab_data_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF")
 
 # Tau data 
@@ -74,11 +80,11 @@ n_subjects = length(ab)
 # ------------------------------------------------------------------
 # Inference
 # ------------------------------------------------------------------
-# using LsqFit
+using LsqFit
 
-# linearmodel(x, p) = part .+ p[1] .* x
-# fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0])
-# println("params = $(fitted_model.param)")
+linearmodel(x, p) = part .+ p[1] .* x
+fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0])
+println("params = $(fitted_model.param)")
 # using CairoMakie
 # begin
 #     f = Figure(size=(600, 500))
@@ -110,17 +116,14 @@ vol_vec_data = vectorise(vols)
 Random.seed!(1234)
 
 m = ensemble_atn_truncated(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
-# pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,  
-#             κ=fitted_model.param[1], β=fitted_model.param[2],);
-pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,);
+pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,
+           β=fitted_model.param[1],);
 pst()
 
-n_samples = 1000
-n_chains = 1
 println("Starting Inference")
 samples = sample(pst, NUTS(0.9), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-lognormal-fixed-0-$(n_chains)x$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-atn/pst-samples-fixed-beta-$(tracer)-$(n_chains)x$(n_samples).jls"), samples)
