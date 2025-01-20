@@ -13,8 +13,8 @@ using DelimitedFiles: readdlm
 
 Return a vector of regional baseline valukes and carrying capacities for amyloid.
 """
-function load_ab_params()
-    ab_params = read(projectdir("output/analysis-derivatives/ab-derivatives/ab-params.csv"), DataFrame)
+function load_ab_params(;tracer="FBP")
+    ab_params = read(projectdir(joinpath("output/analysis-derivatives/ab-derivatives/", tracer, "ab-params.csv")), DataFrame)
     return ab_params.u0, ab_params.ui
 end
 
