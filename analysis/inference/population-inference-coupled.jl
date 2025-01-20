@@ -21,9 +21,6 @@ using Serialization
 tracer = ARGS[1]
 n_samples = parse(Int, ARGS[2])
 n_chains = parse(Int, ARGS[3])
-println(typeof(tracer))
-println(typeof(n_chains))
-
 # --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
