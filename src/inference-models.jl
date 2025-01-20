@@ -9,7 +9,7 @@ using SciMLBase: successful_retcode
 using DifferentialEquations: ODEProblem, EnsembleProblem, Tsit5, solve, remake
 using ADTypes: AutoForwardDiff
 using SciMLSensitivity: InterpolatingAdjoint, ReverseDiffVJP
-using AdvancedHMC: DenseEuclideanMetric
+
 """
     atn_inference(prob::ODEProblem, t)
 
@@ -55,7 +55,7 @@ function fit_model(model, ab, tau, atr, args...;
     pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
     pst()
     println("Starting Inference")
-    samples = sample(pst, NUTS(0.8; metricT=DenseEuclideanMetric, adtype=adbackend), 
+    samples = sample(pst, NUTS(0.8; adtype=adbackend), 
     MCMCSerial(), n_samples, n_chains)
     println("Number of Divergences: $(sum(samples[:numerical_error]))")
     display(summarize(samples))
@@ -120,7 +120,7 @@ end
     Em   ~ LogNormal()
     Es   ~ truncated(Normal(0, 1), lower=0)
     
-    β    ~ truncated(Normal(3.5, 1.0), lower=0)
+    β    ~ truncated(Normal(3.5, 0.1), lower=0., upper=5.)
     
     α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
@@ -174,8 +174,8 @@ end
     α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
     η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
 
-    κ    ~ truncated(Normal(), lower=0)
-    β    ~ truncated(Normal(3.5, 1.), lower=0)
+    κ    ~ truncated(Normal(1.8, 0.1), lower=0)
+    β    ~ truncated(Normal(2.1, 0.25), lower=0)
 
     ensemble_prob = EnsembleProblem(prob, 
                                     prob_func=make_atn_fixed_prob_func(inits, α_a, ρ_t, α_t, κ, β, η, times), 

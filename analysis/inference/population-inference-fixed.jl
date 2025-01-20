@@ -3,7 +3,7 @@ using ATNModelling.SimulationUtils: make_prob, make_atn_model,
                                     load_ab_params, load_tau_params, make_atn_fixed_model
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names
 using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
-using ATNModelling.InferenceModels: fit_model, ensemble_atn, serial_atn, fit_serial_atn, ensemble_atn_truncated_fixed
+using ATNModelling.InferenceModels: fit_model, ensemble_atn, serial_atn, fit_serial_atn, ensemble_atn_truncated_fixed, ensemble_atn_truncated
 
 using Connectomes: laplacian_matrix, get_label
 using ADNIDatasets: ADNIDataset, get_id, get_dates, get_initial_conditions, calc_suvr, get_vol, get_times
@@ -63,7 +63,7 @@ total_vol_norm = [tp ./ sum(tp, dims=1) for tp in tau_pos_vol]
 vols = [clamp.(1 .- (vol ./ vol[:,1]), 0, 1) for vol in total_vol_norm]
 vol_inits = [vol[:,1] for vol in vols]
 
-atn_model = make_atn_fixed_model(u0, ui, v0, L)
+atn_model = make_atn_model(u0, ui, v0, part, L)
 prob = make_prob(atn_model, 
           [ab_inits[1]; tau_inits[1]; vol_inits[1]], 
           (0.0,7.5), [1.0,1.0,1.0,1.0, 3.5,1.0])
@@ -74,7 +74,7 @@ n_subjects = length(ab)
 # ------------------------------------------------------------------
 # Inference
 # ------------------------------------------------------------------
-using LsqFit
+# using LsqFit
 
 # linearmodel(x, p) = part .+ p[1] .* x
 # fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0])
@@ -82,28 +82,26 @@ using LsqFit
 # using CairoMakie
 # begin
 #     f = Figure(size=(600, 500))
-#     ax = Axis(f[1,1])
-#     CairoMakie.ylims!(ax, 0.0, 5.0)
-#     CairoMakie.xlims!(ax, 0.0, 5.0)
-#     CairoMakie.scatter!(part .+ fitted_model.param[1] .* (ui .- u0), vi) 
-#     CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ fitted_model.param[2] .* (0:0.1:1))
-   
+#     ax = Axis(f[1,1], xlabel="Amyloid", ylabel="Tau")
+#     CairoMakie.ylims!(ax, 0.0, 3.0)
+#     CairoMakie.xlims!(ax, 0.0, 3.0)
+#     CairoMakie.scatter!(fitted_model.param[1] .* (ui .- u0), vi .- part)    
 #     f
 # end
-
-linearmodel(x, p) = p[1] .+ p[2] .* x
-fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0, 1.0])
-println("params = $(fitted_model.param)")
-using CairoMakie
-begin
-    f = Figure(size=(600, 500))
-    ax = Axis(f[1,1])
-    CairoMakie.ylims!(ax, 0.0, 5.0)
-    CairoMakie.xlims!(ax, 0.0, 1.0)
-    CairoMakie.scatter!((ui .- u0), vi)    
-    CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ fitted_model.param[2] .* (0:0.1:1))
-    f
-end
+# save(projectdir("output/plots/population-analysis/tau-vs-amyloid.pdf"),f)
+# linearmodel(x, p) = p[1] .+ p[2] .* x
+# fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0, 1.0])
+# println("params = $(fitted_model.param)")
+# using CairoMakie
+# begin
+#     f = Figure(size=(600, 500))
+#     ax = Axis(f[1,1])
+#     CairoMakie.ylims!(ax, 0.0, 5.0)
+#     CairoMakie.xlims!(ax, 0.0, 1.0)
+#     CairoMakie.scatter!((ui .- u0), vi)    
+#     CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ 3. .* (0:0.1:1))
+#     f
+# end
 
 ab_vec_data = vectorise(ab_suvr)
 tau_vec_data = vectorise(tau_suvr)
@@ -111,9 +109,10 @@ vol_vec_data = vectorise(vols)
 
 Random.seed!(1234)
 
-m = ensemble_atn_truncated_fixed(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
-pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,  
-            κ=fitted_model.param[1], β=fitted_model.param[2],);
+m = ensemble_atn_truncated(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
+# pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,  
+#             κ=fitted_model.param[1], β=fitted_model.param[2],);
+pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,);
 pst()
 
 n_samples = 1000
@@ -124,4 +123,4 @@ println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-lognormal-fixed-2-$(n_chains)x$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-atn/pst-samples-lognormal-fixed-0-$(n_chains)x$(n_samples).jls"), samples)
