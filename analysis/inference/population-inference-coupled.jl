@@ -16,10 +16,18 @@ using Random
 using SciMLSensitivity
 using Serialization
 # --------------------------------------------------------------------------------
+# Script params 
+# --------------------------------------------------------------------------------
+tracer = ARGS[1]
+n_samples = parse(Int, ARGS[2])
+n_chains = parse(Int, ARGS[3])
+println(typeof(tracer))
+println(typeof(n_chains))
+
+# --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
-u0, ui = load_ab_params()
-ui_diff = ui .- u0
+u0, ui = load_ab_params(tracer=tracer)
 v0, vi, part = load_tau_params()
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
 L = laplacian_matrix(c) 
@@ -33,7 +41,7 @@ dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 _ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
 _tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
 
-ab_data_df = filter(x -> x.qc_flag==2 && x.TRACER == "FBB", _ab_data_df);
+ab_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer, _ab_data_df);
 # ab_data_df = filter(x -> x.qc_flag==2, _ab_data_df);
 ab_data = ADNIDataset(ab_data_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF")
 
@@ -60,7 +68,7 @@ normalise!(ab_suvr, u0, ui)
 ab_inits = [d[:,1] for d in ab_suvr]
 
 tau_suvr = calc_suvr.(tau)
-normalise!(tau_suvr, v0, vi)
+normalise!(tau_suvr, v0)
 tau_inits = [d[:,1] for d in tau_suvr]
 
 tau_pos_vol = get_vol.(tau)
@@ -84,10 +92,8 @@ tau_vec_data = vectorise(tau_suvr)
 vol_vec_data = vectorise(vols)
 
 Random.seed!(1234)
-n_samples = 1000
-n_chains = 1
 pst = fit_model(ensemble_atn_truncated, ab_vec_data, tau_vec_data, vol_vec_data, 
                      prob, inits, ts, ab_tidx, tau_tidx, n_subjects;
                      n_samples=n_samples, n_chains=n_chains)
 
-serialize(projectdir("output/chains/population-atn/pst-samples-lognormal-fbb-$(n_chains)x$(n_samples).jls"), pst)
+serialize(projectdir("output/chains/population-atn/pst-samples-$(tracer)-$(n_chains)x$(n_samples).jls"), pst)
