@@ -31,17 +31,34 @@ function load_tau_params()
 end
 
 """
-   concentration(v, v0, vi)
+   conc(v, v0, vi)
 
 Calculate the concentration of `v` between baseline value, `v0` and 
 carrying capacity `vi`.
 """
-function concentration(v, v0, vi)
+function conc(v, v0, vi)
     if v0 == vi
         return 0
     else
         (v - v0) / (vi - v0)
     end 
+end
+
+function make_scaled_atn_model(ui, part, L)
+    function atn(D, x, p, t;)
+        u = @view x[1:72]
+        v = @view x[73:144]
+        a = @view x[145:216]
+
+        α_a, ρ_t, α_t, β, η = p
+         
+        vi = part .+ (β .* ui) #.* ( 1 .- a )
+        D[1:72] .= α_a .* ui .* u .* (1 .- u) 
+        D[73:144] .= -ρ_t * L * v .+ α_t .* vi .* v .* (1 .- v)
+        D[145:216] .= η .* v .* ( 1 .- a )
+        return nothing
+    end
+    return ODEFunction(atn)
 end
 
 """
@@ -63,12 +80,16 @@ function make_atn_model(u0, ui, v0, part, L)
         _vi_max = (part .+ (β .* (ui .- u0)))
         D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
         D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
-        D[145:216] .= η .* concentration.(v, v0, _vi_max) .* ( 1 .- a )
+        D[145:216] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
         #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
         return nothing
     end
-    return return ODEFunction(atn)
+    return ODEFunction(atn)
 end
+
+# function make_scaled_atn_model(u0, ui, v0, part, L)
+
+# end
 
 function make_atn_feedback_model(u0, ui, v0, part, L)
     function atn(D, x, p, t;)
@@ -82,11 +103,11 @@ function make_atn_feedback_model(u0, ui, v0, part, L)
         _vi_max = part .+ (β .* _ui)
         D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
         D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
-        D[145:216] .= η .* concentration.(v, v0, _vi_max) .* ( 1 .- a )
+        D[145:216] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
         #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
         return nothing
     end
-    return return ODEFunction(atn)
+    return ODEFunction(atn)
 end
 
 function make_atn_fixed_model(u0, ui, v0, L)
@@ -102,7 +123,7 @@ function make_atn_fixed_model(u0, ui, v0, L)
         _vi_max = (κ .+ (β .* (ui .- u0)))
         D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
         D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
-        D[145:216] .= η .* concentration.(v, v0, _vi_max) .* ( 1 .- a )
+        D[145:216] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
         #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
         return nothing
     end
