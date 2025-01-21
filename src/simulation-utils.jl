@@ -52,7 +52,7 @@ function make_scaled_atn_model(ui, part, L)
 
         α_a, ρ_t, α_t, β, η = p
          
-        vi = part .+ (β .* ui) #.* ( 1 .- a )
+        vi = part .+ (β .* u) #.* ( 1 .- a )
         D[1:72] .= α_a .* ui .* u .* (1 .- u) 
         D[73:144] .= -ρ_t * L * v .+ α_t .* vi .* v .* (1 .- v)
         D[145:216] .= η .* v .* ( 1 .- a )
