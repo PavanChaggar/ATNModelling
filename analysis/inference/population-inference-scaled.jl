@@ -1,6 +1,6 @@
 using ATNModelling.SimulationUtils: make_prob, make_scaled_atn_model, 
                                     simulate, resimulate, simulate_amyloid,
-                                    load_ab_params, load_tau_params, concentration
+                                    load_ab_params, load_tau_params, conc
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names
 using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
 using ATNModelling.InferenceModels: fit_model, ensemble_atn_truncated, serial_atn, fit_serial_atn
