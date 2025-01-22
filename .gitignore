@@ -3,6 +3,8 @@ test
 data/ADNI
 output/plots
 output/chains/population-atn-old
+output/chains/population-atn
+output/chains/population-scaled-atn
 
 py-analysis/env
 py-analysis/roi-data
