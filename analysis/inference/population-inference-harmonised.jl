@@ -18,8 +18,8 @@ using Serialization
 # --------------------------------------------------------------------------------
 # Script params 
 # --------------------------------------------------------------------------------
-n_samples = parse(Int, ARGS[2])
-n_chains = parse(Int, ARGS[3])
+n_samples = parse(Int, ARGS[1])
+n_chains = parse(Int, ARGS[2])
 
 # --------------------------------------------------------------------------------
 # Tracer independent data
