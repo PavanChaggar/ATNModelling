@@ -19,7 +19,7 @@ using Serialization
 # Script params 
 # --------------------------------------------------------------------------------
 n_samples = parse(Int, ARGS[1])
-n_chains = parse(Int, ARGS[2])
+n_chains = parse(Int, ARGS[2w])
 
 # --------------------------------------------------------------------------------
 # Tracer independent data
@@ -34,7 +34,7 @@ _ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFr
 _tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
-tau_pos_df = filter(x ->  x.MTL_Status == 1 &&  x.NEO_Status == 1, tau_data_df);
+tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, tau_data_df);
 tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
 # --------------------------------------------------------------------------------
 # Load fbb data
@@ -130,7 +130,6 @@ fbp_vec_data = vectorise(fbp_conc)
 fbp_tau_vec_data = vectorise(fbp_tau_conc)
 fbp_vol_vec_data = vectorise(fbp_vols)
 
-
 @assert allequal(0 .<= fbb_vec_data .<= 1)
 @assert allequal(0 .<= fbb_tau_vec_data .<= 1)
 @assert allequal(0 .<= fbb_vol_vec_data .<= 1)
@@ -139,9 +138,9 @@ fbp_vol_vec_data = vectorise(fbp_vols)
 @assert allequal(0 .<= fbp_tau_vec_data .<= 1)
 @assert allequal(0 .<= fbp_vol_vec_data .<= 1)
 
-fbb_idx = 1:16
-fbp_idx = 17:24
-n = 24
+fbb_idx = 1:22
+fbp_idx = 23:44
+n = 44
 
 Random.seed!(1234)
 
