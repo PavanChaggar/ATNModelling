@@ -157,4 +157,4 @@ samples = sample(pst, NUTS(0.8, metricT=AdvancedHMC.DenseEuclideanMetric), MCMCS
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
-serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-2scans-$(n_chains)x$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-$(n_chains)x$(n_samples).jls"), samples)
