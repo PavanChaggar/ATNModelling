@@ -156,4 +156,4 @@ samples = sample(pst, NUTS(0.8), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
-serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-$(tracer)-$(n_chains)x$(n_samples).jls"), pst)
+serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-2-$(tracer)-$(n_chains)x$(n_samples).jls"), pst)
