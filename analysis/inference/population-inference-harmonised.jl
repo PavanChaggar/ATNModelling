@@ -15,6 +15,7 @@ using ADTypes: AutoZygote
 using Random
 using SciMLSensitivity
 using Serialization
+using AdvancedHMC
 # --------------------------------------------------------------------------------
 # Script params 
 # --------------------------------------------------------------------------------
@@ -35,7 +36,7 @@ _tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status
 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
 tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 1, tau_data_df);
-tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=2)
+tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
 # --------------------------------------------------------------------------------
 # Load fbb data
 # --------------------------------------------------------------------------------
@@ -44,7 +45,7 @@ fbb_u0, fbb_ui = load_ab_params(tracer=tracer)
 fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer, _ab_data_df);
 fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF")
 
-fbb, fbb_tau = align_data(fbb_data, tau_data; min_tau_scans=2)
+fbb, fbb_tau = align_data(fbb_data, tau_data; min_tau_scans=3)
 
 fbb_times = get_times.(fbb)
 fbb_tau_times = get_times.(fbb_tau)
@@ -85,7 +86,7 @@ fbp_u0, fbp_ui = load_ab_params(tracer=tracer)
 fbp_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer, _ab_data_df);
 fbp_data = ADNIDataset(fbp_data_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF")
 
-fbp, fbp_tau = align_data(fbp_data, tau_data; min_tau_scans=2)
+fbp, fbp_tau = align_data(fbp_data, tau_data; min_tau_scans=3)
 
 fbp_times = get_times.(fbp)
 fbp_tau_times = get_times.(fbp_tau)
@@ -138,9 +139,9 @@ fbp_vol_vec_data = vectorise(fbp_vols)
 @assert allequal(0 .<= fbp_tau_vec_data .<= 1)
 @assert allequal(0 .<= fbp_vol_vec_data .<= 1)
 
-fbb_idx = 1:22
-fbp_idx = 23:43
-n = 43
+fbb_idx = 1:16
+fbp_idx = 17:24
+n = 24
 
 Random.seed!(1234)
 
@@ -152,7 +153,7 @@ pst = m | (fbb_data = fbb_vec_data, fbb_tau_data = fbb_tau_vec_data, fbb_vol_dat
 pst()
 
 println("Starting Inference")
-samples = sample(pst, NUTS(0.8), MCMCSerial(), n_samples, n_chains)
+samples = sample(pst, NUTS(0.8, metricT=AdvancedHMC.DenseEuclideanMetric), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
