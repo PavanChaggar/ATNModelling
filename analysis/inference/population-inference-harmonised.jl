@@ -34,8 +34,8 @@ _ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFr
 _tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
-tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, tau_data_df);
-tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
+tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 1, tau_data_df);
+tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=2)
 # --------------------------------------------------------------------------------
 # Load fbb data
 # --------------------------------------------------------------------------------
@@ -44,7 +44,7 @@ fbb_u0, fbb_ui = load_ab_params(tracer=tracer)
 fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer, _ab_data_df);
 fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF")
 
-fbb, fbb_tau = align_data(fbb_data, tau_data; min_tau_scans=3)
+fbb, fbb_tau = align_data(fbb_data, tau_data; min_tau_scans=2)
 
 fbb_times = get_times.(fbb)
 fbb_tau_times = get_times.(fbb_tau)
@@ -85,7 +85,7 @@ fbp_u0, fbp_ui = load_ab_params(tracer=tracer)
 fbp_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer, _ab_data_df);
 fbp_data = ADNIDataset(fbp_data_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF")
 
-fbp, fbp_tau = align_data(fbp_data, tau_data; min_tau_scans=3)
+fbp, fbp_tau = align_data(fbp_data, tau_data; min_tau_scans=2)
 
 fbp_times = get_times.(fbp)
 fbp_tau_times = get_times.(fbp_tau)
@@ -139,8 +139,8 @@ fbp_vol_vec_data = vectorise(fbp_vols)
 @assert allequal(0 .<= fbp_vol_vec_data .<= 1)
 
 fbb_idx = 1:22
-fbp_idx = 23:44
-n = 44
+fbp_idx = 23:43
+n = 43
 
 Random.seed!(1234)
 
@@ -156,4 +156,4 @@ samples = sample(pst, NUTS(0.8), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
-serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-2-$(tracer)-$(n_chains)x$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-2scans-$(n_chains)x$(n_samples).jls"), samples)
