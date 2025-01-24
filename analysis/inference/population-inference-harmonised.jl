@@ -35,7 +35,7 @@ _ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFr
 _tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
-tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 1, tau_data_df);
+tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, tau_data_df);
 tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
 # --------------------------------------------------------------------------------
 # Load fbb data
@@ -139,17 +139,17 @@ fbp_vol_vec_data = vectorise(fbp_vols)
 @assert allequal(0 .<= fbp_tau_vec_data .<= 1)
 @assert allequal(0 .<= fbp_vol_vec_data .<= 1)
 
-fbb_idx = 1:16
-fbp_idx = 17:24
-n = 24
+fbb_idx = 1:22
+fbp_idx = 23:44
+n = 44
 
 Random.seed!(1234)
 
 m = ensemble_atn_harmonised(fbb_prob, fbb_inits, fbb_ts, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
                         fbp_prob, fbp_inits, fbp_ts, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
 
-pst = m | (fbb_data = fbb_vec_data, fbb_tau_data = fbb_tau_vec_data, fbb_vol_data = fbb_tau_vec_data,
-          fbp_data = fbp_vec_data, fbp_tau_data = fbp_tau_vec_data, fbp_vol_data = fbp_tau_vec_data,);
+pst = m | (fbb_data = fbb_vec_data, fbb_tau_data = fbb_tau_vec_data, fbb_vol_data = fbb_vol_vec_data,
+          fbp_data = fbp_vec_data, fbp_tau_data = fbp_tau_vec_data, fbp_vol_data = fbp_vol_vec_data,);
 pst()
 
 println("Starting Inference")
