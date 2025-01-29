@@ -221,6 +221,13 @@ function make_atn_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times
     end
 end
 
+function make_atn_individial_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times)
+    function prob_func(prob,i,repeat)
+        remake(prob, u0=initial_conditions[i], 
+                     p=[α_a[i], ρ_t[i], α_t[i], β[i], η[i]], saveat=_times[i])
+    end
+end
+
 function make_atn_fixed_prob_func(initial_conditions, α_a, ρ_t, α_t, κ, β, η, _times)
     function prob_func(prob,i,repeat)
         remake(prob, u0=initial_conditions[i], 
