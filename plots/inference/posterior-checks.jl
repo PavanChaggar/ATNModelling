@@ -5,10 +5,11 @@ using Turing
 using Colors
 using Distributions
 
+pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-1x1000.jls"));
 
 begin
     using CairoMakie; CairoMakie.activate!()
-    pst = deserialize(projectdir("output/chains/population-atn/pst-samples-lognormal-2-1x1000.jls"));
+    pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-1x1000.jls"));
     
     colors = Makie.wong_colors();
 
@@ -26,7 +27,7 @@ begin
     ylims!(ax, 0.0,150)
     hidespines!(ax, :l, :t, :r)
     hideydecorations!(ax)
-    for j in 1:22
+    for j in 1:44
         density!(vec(Array(pst[Symbol("α_a[$j]")])), color=alphacolor(colors[1], 0.5), strokecolor=:white, strokewidth=1)
     end
     
@@ -39,7 +40,7 @@ begin
     ax = Axis(g[2][1,2:3], xticks=0:0.05:0.35, xlabel=L"1 / yr", xlabelsize=25,)
     hidespines!(ax, :l, :t, :r)
     hideydecorations!(ax)
-    for j in 1:22
+    for j in 1:44
         density!(vec(Array(pst[Symbol("ρ_t[$j]")])), color=alphacolor(colors[1], 0.5), strokecolor=:white, strokewidth=1)
     end
     xlims!(ax, 0.0,0.315)
@@ -53,7 +54,7 @@ begin
     ax = Axis(g[3][1,2:3], xticks=0:0.05:0.35,  xlabel=L"1 / yr", xlabelsize=25,)
     hidespines!(ax, :l, :t, :r)
     hideydecorations!(ax)
-    for j in 1:22
+    for j in 1:44
         density!(vec(Array(pst[Symbol("α_t[$j]")])), color=alphacolor(colors[1], 0.5), strokecolor=:white, strokewidth=1)
     end
     ylims!(ax, 0.0,250)
@@ -62,10 +63,10 @@ begin
     ax = Axis(g[5][1,1], xticks=4.5:0.5:6., ylabel=L"\beta", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
     hidespines!(ax, :l, :t, :r)
     hideydecorations!(ax, label=false)
-    for j in 1:37
+    for j in 1:44
         hist!(vec(Array(pst[Symbol("β")])), bins=15, color=alphacolor(colors[1], 0.5), strokecolor=:white, strokewidth=1)
     end
-    xlims!(ax, 4.5,6.25)
+    xlims!(ax, 3,6.)
     ax = Axis(g[5][1,2:3])
     hidespines!(ax)
     hideydecorations!(ax)
@@ -79,7 +80,7 @@ begin
     ax = Axis(g[4][1,2:3], xticks=0:0.2:0.8, xlabel=L"1 / yr", xlabelsize=25,)
     hidespines!(ax, :l, :t, :r)
     hideydecorations!(ax)
-    for j in 1:22
+    for j in 1:44
         density!(vec(Array(pst[Symbol("η[$j]")])), color=alphacolor(colors[1], 0.5), strokecolor=:white, strokewidth=1)
     end
     xlims!(ax, 0.0,0.84)
