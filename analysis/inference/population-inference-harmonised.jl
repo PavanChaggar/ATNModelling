@@ -1,9 +1,9 @@
-using ATNModelling.SimulationUtils: make_prob, make_scaled_atn_model, 
+using ATNModelling.SimulationUtils: make_prob, make_atn_model, 
                                     simulate, resimulate, simulate_amyloid,
                                     load_ab_params, load_tau_params, conc
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names
 using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
-using ATNModelling.InferenceModels: fit_model, ensemble_atn_harmonised, serial_atn, fit_serial_atn
+using ATNModelling.InferenceModels: fit_model, ensemble_atn_harmonised, ensemble_atn_harmonised_individual
 
 using Connectomes: laplacian_matrix, get_label
 using ADNIDatasets: ADNIDataset, get_id, get_dates, get_initial_conditions, calc_suvr, get_vol, get_times
@@ -60,13 +60,11 @@ fbb_tau_tidx = get_time_idx(fbb_tau_times, fbb_ts)
 
 fbb_suvr = calc_suvr.(fbb)
 normalise!(fbb_suvr, fbb_u0, fbb_ui)
-fbb_conc = map(x -> conc.(x, fbb_u0, fbb_ui), fbb_suvr)
-fbb_inits = [d[:,1] for d in fbb_conc]
+fbb_inits = [d[:,1] for d in fbb_suvr]
 
 fbb_tau_suvr = calc_suvr.(fbb_tau)
-normalise!(fbb_tau_suvr, v0, vi)
-fbb_tau_conc = map(x -> conc.(x, v0, vi), fbb_tau_suvr)
-fbb_tau_inits = [d[:,1] for d in fbb_tau_conc]
+normalise!(fbb_tau_suvr, v0)
+fbb_tau_inits = [d[:,1] for d in fbb_tau_suvr]
 
 fbb_tau_pos_vol = get_vol.(fbb_tau)
 fbb_total_vol_norm = [tp ./ sum(tp, dims=1) for tp in fbb_tau_pos_vol]
@@ -76,8 +74,9 @@ fbb_vol_inits = [vol[:,1] for vol in fbb_vols]
 fbb_inits = [[ab; tau; vol] for (ab, tau, vol) in zip(fbb_inits, fbb_tau_inits, fbb_vol_inits)]
 fbb_n = length(fbb)
 
-fbb_atn_model = make_scaled_atn_model(fbb_ui .- fbb_u0, part .- v0, L)
+fbb_atn_model = make_atn_model(fbb_u0, fbb_ui, v0, part, L)
 fbb_prob = make_prob(fbb_atn_model, fbb_inits[1], (0.0,7.5), [1.0,0.1,1.0,3.5,1.0])
+sol = solve(fbb_prob, Tsit5())
 # --------------------------------------------------------------------------------
 # Load fbp data
 # --------------------------------------------------------------------------------
@@ -101,13 +100,11 @@ fbp_tau_tidx = get_time_idx(fbp_tau_times, fbp_ts)
 
 fbp_suvr = calc_suvr.(fbp)
 normalise!(fbp_suvr, fbp_u0, fbp_ui)
-fbp_conc = map(x -> conc.(x, fbp_u0, fbp_ui), fbp_suvr)
-fbp_inits = [d[:,1] for d in fbp_conc]
+fbp_inits = [d[:,1] for d in fbp_suvr]
 
 fbp_tau_suvr = calc_suvr.(fbp_tau)
-normalise!(fbp_tau_suvr, v0, vi)
-fbp_tau_conc = map(x -> conc.(x, v0, vi), fbp_tau_suvr)
-fbp_tau_inits = [d[:,1] for d in fbp_tau_conc]
+normalise!(fbp_tau_suvr, v0)
+fbp_tau_inits = [d[:,1] for d in fbp_tau_suvr]
 
 fbp_tau_pos_vol = get_vol.(fbp_tau)
 fbp_total_vol_norm = [tp ./ sum(tp, dims=1) for tp in fbp_tau_pos_vol]
@@ -118,8 +115,9 @@ fbp_inits = [[ab; tau; vol] for (ab, tau, vol) in zip(fbp_inits, fbp_tau_inits, 
 fbp_n = length(fbp)
 
 fbp_atn_model = make_scaled_atn_model(fbp_ui .- fbp_u0, part .- v0, L)
+fbp_atn_model = make_atn_model(fbp_u0, fbp_ui, v0, part, L)
 fbp_prob = make_prob(fbp_atn_model, fbp_inits[1], (0.0,7.5), [1.0,0.1,1.0,3.5,1.0])
-
+sol = solve(fbp_prob, Tsit5())
 # ------------------------------------------------------------------
 # Inference
 # ------------------------------------------------------------------
@@ -157,4 +155,4 @@ samples = sample(pst, Turing.NUTS(0.8), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
-serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-diag-$(n_chains)x$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-ind-diag-$(n_chains)x$(n_samples).jls"), samples)

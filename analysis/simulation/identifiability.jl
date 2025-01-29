@@ -1,6 +1,6 @@
 using ATNModelling.SimulationUtils: load_ab_params, load_tau_params,
                                     make_atn_model, make_prob, simulate, resimulate,
-                                    generate_data
+                                    generate_data, simulate
 using ATNModelling.ConnectomeUtils: get_connectome
 using ATNModelling.InferenceModels: atn_inference, fit_model
 using Connectomes: laplacian_matrix, get_label
@@ -54,3 +54,39 @@ for t in ts_slide
     serialize(projectdir("output/chains/atn-identifiability/pst-$(_ts[1])-$(_ts[end]).jls"), 
               _samples)
 end
+
+init_ts = collect(0:3:30)
+sol = simulate(f, inits, tspan, params; saveat=init_ts)
+
+inits_ts = [sol[i] for i in 1:11]
+
+using CairoMakie
+begin
+    fig = Figure()
+    ax = Axis(fig[1,1])
+    for i in 73:144
+        lines!(sol.t, Array(sol)[i, :], color=(:grey, 0.5))
+    end
+
+    for (t0, ts) in zip(inits_ts, ts_slide)
+        _prob = make_prob(f, t0, tspan, params)
+        _ab, _tau, _atr = generate_data(_prob, [0.0,1.5,3.0], 0.0)
+        _tau_array = reshape(_tau, 72, 3)
+        for i in 1:72
+            scatter!(ts, _tau_array[i, :], color=:red)
+        end
+    end
+    fig
+end
+
+for (t0, ts) in zip(inits_ts, ts_slide)
+    _ts = Int.(extrema(ts))
+    _prob = make_prob(f, t0, tspan, params)
+    _ab, _tau, _atr = generate_data(_prob, [0.0,1.5,3.0], noise)
+    save(projectdir("output/synthetic-data/atn-identifiability/pst-t$(_ts[1])-$(_ts[1])-$(_ts[end]).jld2"), 
+              Dict("ab" => _ab, "tau" => _tau, "atr" => _atr))
+    
+    _samples = fit_model(atn_inference, _ab, _tau, _atr, _prob, [0.0,1.5,3.0])
+    serialize(projectdir("output/chains/atn-identifiability/pst-t$(_ts[1])-$(_ts[1])-$(_ts[end]).jls"), 
+              _samples)
+end 
