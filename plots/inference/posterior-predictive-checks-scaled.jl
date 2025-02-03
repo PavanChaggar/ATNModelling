@@ -42,6 +42,7 @@ fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=2, reference_region="COM
 
 fbb, fbb_tau = align_data(fbb_data, tau_data; min_tau_scans=3)
 
+
 fbb_times = get_times.(fbb)
 fbb_tau_times = get_times.(fbb_tau)
 fbb_ts = [sort(unique([a; t])) for (a, t) in zip(fbb_times, fbb_tau_times)]
@@ -129,45 +130,45 @@ end
 # data_dashboard(tau, v0, vi; show_mtl_threshold=true)
 
 using CairoMakie; CairoMakie.activate!()
-begin
-    ab_sols = Vector{Array{Float64}}()
-    tau_sols = Vector{Array{Float64}}()
-    atr_sols = Vector{Array{Float64}}()
-    # pst = deserialize(projectdir("analysis/output/chains/testatnpst-beta-u-conc-normal.jls"));
-    meanpst = mean(pst)
-    for sub in 1:22
-        p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
-        meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β"), :mean], 
-        meanpst[Symbol("η[$sub]"), :mean]]
+# begin
+#     ab_sols = Vector{Array{Float64}}()
+#     tau_sols = Vector{Array{Float64}}()
+#     atr_sols = Vector{Array{Float64}}()
+#     # pst = deserialize(projectdir("analysis/output/chains/testatnpst-beta-u-conc-normal.jls"));
+#     meanpst = mean(pst)
+#     for sub in 1:22
+#         p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
+#         meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β"), :mean], 
+#         meanpst[Symbol("η[$sub]"), :mean]]
 
-        pstprob = ODEProblem(fbb_atn_model, fbb_inits[sub], (0.0, 10.0), p)
-        pstsol = solve(pstprob, Tsit5())
-        push!(ab_sols,pstsol(fbb_times[sub])[1:72,:])
-        push!(tau_sols,pstsol(fbb_tau_times[sub])[73:144,:])
-        push!(atr_sols,pstsol(fbb_tau_times[sub])[145:216,:])
-    end 
+#         pstprob = ODEProblem(fbb_atn_model, fbb_inits[sub], (0.0, 10.0), p)
+#         pstsol = solve(pstprob, Tsit5())
+#         push!(ab_sols,pstsol(fbb_times[sub])[1:72,:])
+#         push!(tau_sols,pstsol(fbb_tau_times[sub])[73:144,:])
+#         push!(atr_sols,pstsol(fbb_tau_times[sub])[145:216,:])
+#     end 
     
-    for sub in 1:22
-    f = Figure(size=(1500, 600))
+#     for sub in 1:22
+#     f = Figure(size=(1500, 600))
 
-    ax1 = CairoMakie.Axis(f[1,1])
-    CairoMakie.xlims!(ax1, -0.5, 0.5)
-    CairoMakie.ylims!(ax1, -0.5, 0.5)
+#     ax1 = CairoMakie.Axis(f[1,1])
+#     CairoMakie.xlims!(ax1, -0.5, 0.5)
+#     CairoMakie.ylims!(ax1, -0.5, 0.5)
     
-    ax2 = CairoMakie.Axis(f[1,2])
-    CairoMakie.xlims!(ax2, -1.0, 1.0)
-    CairoMakie.ylims!(ax2, -1.0, 1.0)
+#     ax2 = CairoMakie.Axis(f[1,2])
+#     CairoMakie.xlims!(ax2, -1.0, 1.0)
+#     CairoMakie.ylims!(ax2, -1.0, 1.0)
 
-    ax3 = CairoMakie.Axis(f[1,3])
-    CairoMakie.xlims!(ax3, -0., 0.5)
-    CairoMakie.ylims!(ax3, -0., 0.5)
+#     ax3 = CairoMakie.Axis(f[1,3])
+#     CairoMakie.xlims!(ax3, -0., 0.5)
+#     CairoMakie.ylims!(ax3, -0., 0.5)
 
-    CairoMakie.scatter!(ax1, get_diff(fbb_suvr[sub]), get_diff(ab_sols[sub]))
-    CairoMakie.scatter!(ax2, get_diff(fbb_tau_suvr[sub]), get_diff(tau_sols[sub]))
-    CairoMakie.scatter!(ax3, get_diff(fbb_vols[sub]), get_diff(atr_sols[sub]))
-    display(f)
-    end
-end
+#     CairoMakie.scatter!(ax1, get_diff(fbb_suvr[sub]), get_diff(ab_sols[sub]))
+#     CairoMakie.scatter!(ax2, get_diff(fbb_tau_suvr[sub]), get_diff(tau_sols[sub]))
+#     CairoMakie.scatter!(ax3, get_diff(fbb_vols[sub]), get_diff(atr_sols[sub]))
+#     display(f)
+#     end
+# end
 
 braak_regions = get_braak_regions()
 bs = [findall(x -> get_node_id(x) ∈ br, cortex) for br in braak_regions]
@@ -287,158 +288,32 @@ begin
 end
 save(projectdir("output/plots/inference-results/pst-pred-harmonised-scaled.pdf"),f)
 
-# pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-fixed-beta-$(tracer)-1x1000.jls"));
-# using LsqFit
-# linearmodel(x, p) = part .+ p[1] .* x
-# fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0])
-# β = fitted_model.param[1]
-# println("params = $(fitted_model.param)")
+# pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-ind-diag-1x1000.jls"));
+# summarize(pst)
+# meanpst = mean(pst)
 
-# function get_diff(d)
-#     d[:,end] .- d[:,1]
-# end
+# using CairoMakie; CairoMakie.activate!()
 
-# using CairoMakie
-# # begin    
-# #     ab_sols = Vector{Array{Float64}}()
-# #     tau_sols = Vector{Array{Float64}}()
-# #     atr_sols = Vector{Array{Float64}}()
-# #     # pst = deserialize(projectdir("analysis/output/chains/testatnpst-beta-u-conc-normal.jls"));
-# #     meanpst = mean(pst)
-# #     for sub in 1:22
-# #     p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
-# #     meanpst[Symbol("α_t[$sub]"), :mean], β, 
-# #     meanpst[Symbol("η[$sub]"), :mean]]
-# #     pstprob = ODEProblem(atn_model, inits[sub], (0.0, 10.0), p)
-# #     pstsol = solve(pstprob, Tsit5())
-# #     push!(ab_sols,pstsol(ab_times[sub])[1:72,:])
-# #     push!(tau_sols,pstsol(tau_times[sub])[73:144,:])
-# #     push!(atr_sols,pstsol(tau_times[sub])[145:216,:])
-# #     end 
-    
-# #     for sub in 1:22
-# #     f = Figure(size=(1500, 600))
+# mtl_regions = ["entorhinal", "Left-Amygdala", "Right-Amygdala"] 
+# mtl = findall(x -> x ∈ mtl_regions, get_label.(cortex)) 
+# neo_regions = ["inferiortemporal", "middletemporal"] 
+# neo = findall(x -> x ∈ neo_regions, get_label.(cortex))
 
-# #     ax1 = CairoMakie.Axis(f[1,1])
-# #     CairoMakie.xlims!(ax1, -0.5, 0.5)
-# #     CairoMakie.ylims!(ax1, -0.5, 0.5)
-    
-# #     ax2 = CairoMakie.Axis(f[1,2])
-# #     CairoMakie.xlims!(ax2, -1.0, 1.0)
-# #     CairoMakie.ylims!(ax2, -1.0, 1.0)
+# rois = mtl
+# ms = [mean(pst["β[$i]"]) for i in 1:44]
+# stds = [std(pst["β[$i]"]) for i in 1:44]
+# mean_tau_inits = [[mean(fbb_tau_inits[i][rois]) for i in 1:22]; [mean(fbp_tau_inits[i][rois]) for i in 1:22]]
+# mean_ab_inits = [[mean(fbb_inits[i][rois]) for i in 1:22]; [mean(fbp_its[i][rois]) for i in 1:22]]
 
-# #     ax3 = CairoMakie.Axis(f[1,3])
-# #     CairoMakie.xlims!(ax3, -0., 0.5)
-# #     CairoMakie.ylims!(ax3, -0., 0.5)
+# scatter(ms, mean_ab_inits)
+# scatter(stds,  mean_ab_inits .* mean_tau_inits)
+# scatter(stds, mean_ab_inits)
+# scatter(stds, mean_tau_inits)
 
-# #     CairoMakie.scatter!(ax1, get_diff(ab_suvr[sub]), get_diff(ab_sols[sub]))
-# #     CairoMakie.scatter!(ax2, get_diff(tau_suvr[sub]), get_diff(tau_sols[sub]))
-# #     CairoMakie.scatter!(ax3, get_diff(vols[sub]), get_diff(atr_sols[sub]))
-# #     display(f)
-# #     end
-# # end
-
-# braak_regions = get_braak_regions()
-# bs = [findall(x -> get_node_id(x) ∈ br, cortex) for br in braak_regions]
-
+# using GLMakie; GLMakie.activate!()
 # begin
-#     cmap = Makie.wong_colors();
-
-#     f = Figure(size=(1500, 500))
-#     titlesize = 40
-#     xlabelsize = 25 
-#     ylabelsize = 25
-#     xticklabelsize = 20 
-#     yticklabelsize = 20
-
-#     start = -0.02
-#     stop = 0.08
-#     border = 0.005
-#     ax4 =CairoMakie.Axis(f[1,1],  
-#             xlabel="Δ SUVR", 
-#             ylabel="Δ Prediction", 
-#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
-#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
-#             xticks=start:0.02:stop, yticks=start:0.02:stop, 
-#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
-#             xtickformat = "{:.3f}", ytickformat = "{:.3f}")
-
-#     CairoMakie.xlims!(ax4, start, stop + border)
-#     CairoMakie.ylims!(ax4, start, stop + border)
-#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
-    
-#     start = -0.0
-#     stop = 0.3
-#     border = 0.01
-#     ax5 =CairoMakie.Axis(f[1,2],  
-#             xlabel="Δ SUVR", 
-#             ylabel="Δ Prediction", 
-#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
-#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
-#             xticks=start:0.05:stop, yticks=start:0.05:stop, 
-#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
-#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
-#     hideydecorations!(ax5, grid=false, ticks=false, ticklabels=false)
-#     CairoMakie.xlims!(ax5, start, stop + border)
-#     CairoMakie.ylims!(ax5, start, stop + border)
-#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
-
-#     start = -0.0
-#     stop = 0.15
-#     border = 0.01
-#     ax6= CairoMakie.Axis(f[1,3],  
-#             xlabel="Δ Atr.", 
-#             ylabel="Δ Prediction", 
-#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
-#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
-#             xticks=start:0.05:stop, yticks=start:0.05:stop, 
-#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
-#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
-#     hideydecorations!(ax6, grid=false, ticks=false, ticklabels=false)
-#     CairoMakie.xlims!(ax6, start, stop + border)
-#     CairoMakie.ylims!(ax6, start, stop + border)
-#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
-    
-#     ab_sols = Vector{Array{Float64}}()
-#     tau_sols = Vector{Array{Float64}}()
-#     atr_sols = Vector{Array{Float64}}()
-#     meanpst = mean(pst)
-
-#     for sub in 1:22
-#         p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
-#         meanpst[Symbol("α_t[$sub]"), :mean], β, 
-#         meanpst[Symbol("η[$sub]"), :mean]]
-        
-#         pstprob = ODEProblem(atn_model, inits[sub], (0.0, 10.0), p)
-#         pstsol = solve(pstprob, Tsit5())
-#         push!(ab_sols,pstsol(ab_times[sub])[1:72,:])
-#         push!(tau_sols,pstsol(tau_times[sub])[73:144,:])
-#         push!(atr_sols,pstsol(tau_times[sub])[145:216,:])
-#     end
-#     mean_ab_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in ab_sols]), dims=2))
-#     mean_tau_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in tau_sols]), dims=2))
-#     mean_atr_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in atr_sols]), dims=2))
-    
-#     mean_ab =  vec(mean(reduce(hcat, [d[:, end] for d in ab_suvr]), dims=2))
-#     mean_tau =  vec(mean(reduce(hcat, [d[:, end] for d in tau_suvr]), dims=2))
-#     mean_atr =  vec(mean(reduce(hcat, [d[:, end] for d in vols]), dims=2))
-    
-#     mean_ab_sol_diff = vec(mean(reduce(hcat, get_diff.(ab_sols)), dims=2))
-#     mean_tau_sol_diff = vec(mean(reduce(hcat, get_diff.(tau_sols)), dims=2))
-#     mean_atr_sol_diff = vec(mean(reduce(hcat, get_diff.(atr_sols)), dims=2))
-
-#     mean_ab_diff = vec(mean(reduce(hcat, get_diff.(ab_suvr)), dims=2))
-#     mean_tau_diff = vec(mean(reduce(hcat, get_diff.(tau_suvr)), dims=2))
-#     mean_atr_diff = vec(mean(reduce(hcat, get_diff.(vols)), dims=2))
-
-#     labels = ["Braak 1", "Braak 2/3", "Braak 4", "Braak 5", "Braak 6"]
-#     for (i, rois) in enumerate(bs)
-#     CairoMakie.scatter!(ax4, mean_ab_diff[rois], mean_ab_sol_diff[rois], color=cmap[i], markersize=20 , label=labels[i])
-#     CairoMakie.scatter!(ax5, mean_tau_diff[rois], mean_tau_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
-#     CairoMakie.scatter!(ax6, mean_atr_diff[rois], mean_atr_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
-#     end
-#     Legend(f[2,:], ax6, framevisible = false, unique=true, labelsize=35, nbanks=5, tellheight=true)
-
+#     f = Figure(size=(500, 600))
+#     ax = Axis3(f[1,1], xlabel="ms", ylabel="stds", zlabel="tau inits")
+#     scatter!(ms, stds, mean_tau_inits .* mean_ab_inits)    
 #     f
 # end
-# save(projectdir("output/plots/inference-results/pst-pred-$(tracer)-fixed-beta-scaled.pdf"),f)

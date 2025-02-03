@@ -61,6 +61,23 @@ function make_scaled_atn_model(ui, part, L)
     return ODEFunction(atn)
 end
 
+function make_scaled_atn_model_hemisphere(ui, part, L)
+    function atn(D, x, p, t;)
+        u = @view x[1:36]
+        v = @view x[37:72]
+        a = @view x[73:108]
+
+        α_a, ρ_t, α_t, β, η = p
+         
+        vi = part .+ (β .* u) #.* ( 1 .- a )
+        D[1:36] .= α_a .* ui .* u .* (1 .- u) 
+        D[37:72] .= -ρ_t * L * v .+ α_t .* vi .* v .* (1 .- v)
+        D[73:108] .= η .* v .* ( 1 .- a )
+        return nothing
+    end
+    return ODEFunction(atn)
+end
+
 """
    make_atn_model(u0, ui, v0, part, L)
 
@@ -86,10 +103,6 @@ function make_atn_model(u0, ui, v0, part, L)
     end
     return ODEFunction(atn)
 end
-
-# function make_scaled_atn_model(u0, ui, v0, part, L)
-
-# end
 
 function make_atn_feedback_model(u0, ui, v0, part, L)
     function atn(D, x, p, t;)
