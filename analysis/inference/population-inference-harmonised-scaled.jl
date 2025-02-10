@@ -143,18 +143,17 @@ fbb_idx = 1:22
 fbp_idx = 23:44
 n = 44
 
-Random.seed!(1234)
-
 m = ensemble_atn_harmonised(fbb_prob, fbb_inits, fbb_ts, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
                                        fbp_prob, fbp_inits, fbp_ts, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
 
 pst = m | (fbb_data = fbb_vec_data, fbb_tau_data = fbb_tau_vec_data, fbb_vol_data = fbb_vol_vec_data,
           fbp_data = fbp_vec_data, fbp_tau_data = fbp_tau_vec_data, fbp_vol_data = fbp_vol_vec_data,);
 pst()
-
-println("Starting Inference")
-samples = sample(pst, Turing.NUTS(0.8, metricT=AdvancedHMC.DenseEuclideanMetric), MCMCSerial(), n_samples, n_chains)
-println("Number of Divergences: $(sum(samples[:numerical_error]))")
-display(summarize(samples))
-
-serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-$(n_chains)x$(n_samples).jls"), samples)
+for i in 2:n_chains
+    Random.seed!(i * 1234)
+    println("Starting Inference")
+    samples = sample(pst, Turing.NUTS(0.8, metricT=AdvancedHMC.DenseEuclideanMetric), n_samples)
+    println("Number of Divergences: $(sum(samples[:numerical_error]))")
+    display(summarize(samples))
+    serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-$(i)-$(n_samples).jls"), samples)
+end
