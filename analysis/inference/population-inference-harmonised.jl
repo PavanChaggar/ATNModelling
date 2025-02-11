@@ -149,12 +149,12 @@ pst = m | (fbb_data = fbb_vec_data, fbb_tau_data = fbb_tau_vec_data, fbb_vol_dat
           fbp_data = fbp_vec_data, fbp_tau_data = fbp_tau_vec_data, fbp_vol_data = fbp_vol_vec_data,);
 pst()
 
-Random.seed!(i * 1234)
+Random.seed!(1234)
 
 println("Starting Inference")
-samples = sample(pst, Turing.NUTS(0.8, metricT=AdvancedHMC.DenseEuclideanMetric), n_samples)
+samples = sample(pst, Turing.NUTS(0.8, metricT=AdvancedHMC.DenseEuclideanMetric), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 
 display(summarize(samples))
 
-serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-unscaled-dense-$(i)-$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-suvr-dense-$(n_chains)x$(n_samples).jls"), samples)
