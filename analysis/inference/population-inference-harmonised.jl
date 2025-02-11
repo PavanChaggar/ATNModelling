@@ -114,28 +114,27 @@ fbp_vol_inits = [vol[:,1] for vol in fbp_vols]
 fbp_inits = [[ab; tau; vol] for (ab, tau, vol) in zip(fbp_inits, fbp_tau_inits, fbp_vol_inits)]
 fbp_n = length(fbp)
 
-fbp_atn_model = make_scaled_atn_model(fbp_ui .- fbp_u0, part .- v0, L)
 fbp_atn_model = make_atn_model(fbp_u0, fbp_ui, v0, part, L)
 fbp_prob = make_prob(fbp_atn_model, fbp_inits[1], (0.0,7.5), [1.0,0.1,1.0,3.5,1.0])
 sol = solve(fbp_prob, Tsit5())
 # ------------------------------------------------------------------
 # Inference
 # ------------------------------------------------------------------
-fbb_vec_data = vectorise(fbb_conc)
-fbb_tau_vec_data = vectorise(fbb_tau_conc)
+fbb_vec_data = vectorise(fbb_suvr)
+fbb_tau_vec_data = vectorise(fbb_tau_suvr)
 fbb_vol_vec_data = vectorise(fbb_vols)
 
-fbp_vec_data = vectorise(fbp_conc)
-fbp_tau_vec_data = vectorise(fbp_tau_conc)
+fbp_vec_data = vectorise(fbp_suvr)
+fbp_tau_vec_data = vectorise(fbp_tau_suvr)
 fbp_vol_vec_data = vectorise(fbp_vols)
 
-@assert allequal(0 .<= fbb_vec_data .<= 1)
-@assert allequal(0 .<= fbb_tau_vec_data .<= 1)
-@assert allequal(0 .<= fbb_vol_vec_data .<= 1)
+# @assert allequal(0 .<= fbb_vec_data .<= 1)
+# @assert allequal(0 .<= fbb_tau_vec_data .<= 1)
+# @assert allequal(0 .<= fbb_vol_vec_data .<= 1)
 
-@assert allequal(0 .<= fbp_vec_data .<= 1)
-@assert allequal(0 .<= fbp_tau_vec_data .<= 1)
-@assert allequal(0 .<= fbp_vol_vec_data .<= 1)
+# @assert allequal(0 .<= fbp_vec_data .<= 1)
+# @assert allequal(0 .<= fbp_tau_vec_data .<= 1)
+# @assert allequal(0 .<= fbp_vol_vec_data .<= 1)
 
 fbb_idx = 1:22
 fbp_idx = 23:44
@@ -144,15 +143,18 @@ n = 44
 Random.seed!(1234)
 
 m = ensemble_atn_harmonised(fbb_prob, fbb_inits, fbb_ts, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
-                        fbp_prob, fbp_inits, fbp_ts, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
+                            fbp_prob, fbp_inits, fbp_ts, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
 
 pst = m | (fbb_data = fbb_vec_data, fbb_tau_data = fbb_tau_vec_data, fbb_vol_data = fbb_vol_vec_data,
           fbp_data = fbp_vec_data, fbp_tau_data = fbp_tau_vec_data, fbp_vol_data = fbp_vol_vec_data,);
 pst()
 
+Random.seed!(i * 1234)
+
 println("Starting Inference")
-samples = sample(pst, Turing.NUTS(0.8), MCMCSerial(), n_samples, n_chains)
+samples = sample(pst, Turing.NUTS(0.8, metricT=AdvancedHMC.DenseEuclideanMetric), n_samples)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
+
 display(summarize(samples))
 
-serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-ind-diag-$(n_chains)x$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-unscaled-dense-$(i)-$(n_samples).jls"), samples)
