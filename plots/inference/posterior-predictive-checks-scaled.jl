@@ -193,7 +193,7 @@ begin
             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
             xticks=start:0.05:stop, yticks=start:0.05:stop, 
             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
-            xtickformat = "{:.3f}", ytickformat = "{:.3f}")
+            xtickformat = "{:.2f}", ytickformat = "{:.2f}")
 
     CairoMakie.xlims!(ax4, start, stop + border)
     CairoMakie.ylims!(ax4, start, stop + border)
@@ -267,6 +267,10 @@ begin
     mean_ab =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_conc; fbp_conc]]), dims=2))
     mean_tau =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_tau_conc; fbp_tau_conc]]), dims=2))
     mean_atr =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_vols; fbp_vols]]), dims=2))
+
+    # mean_ab =  vec(mean(reduce(hcat, [d[:, end] for d in fbb_conc]), dims=2)) #; fbp_conc]]), dims=2))
+    # mean_tau =  vec(mean(reduce(hcat, [d[:, end] for d in fbb_tau_conc]), dims=2)) #; fbp_tau_conc]]), dims=2))
+    # mean_atr =  vec(mean(reduce(hcat, [d[:, end] for d in fbb_vols]), dims=2)) #; fbp_vols]]), dims=2))
     
     mean_ab_sol_diff = vec(mean(reduce(hcat, get_diff.(ab_sols)), dims=2))
     mean_tau_sol_diff = vec(mean(reduce(hcat, get_diff.(tau_sols)), dims=2))
@@ -276,11 +280,15 @@ begin
     mean_tau_diff = vec(mean(reduce(hcat, get_diff.([fbb_tau_conc; fbp_tau_conc])), dims=2))
     mean_atr_diff = vec(mean(reduce(hcat, get_diff.([fbb_vols; fbp_vols])), dims=2))
 
+    # mean_ab_diff = vec(mean(reduce(hcat, get_diff.(fbb_conc)), dims=2)) #; fbp_conc])), dims=2))
+    # mean_tau_diff = vec(mean(reduce(hcat, get_diff.(fbb_tau_conc)), dims=2)) #; fbp_tau_conc])), dims=2))
+    # mean_atr_diff = vec(mean(reduce(hcat, get_diff.(fbb_vols)), dims=2)) #; fbp_vols])), dims=2))
+
     labels = ["Braak 1", "Braak 2/3", "Braak 4", "Braak 5", "Braak 6"]
     for (i, rois) in enumerate(bs)
-    CairoMakie.scatter!(ax4, mean_ab_diff[rois], mean_ab_sol_diff[rois], color=cmap[i], markersize=20 , label=labels[i])
-    CairoMakie.scatter!(ax5, mean_tau_diff[rois], mean_tau_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
-    CairoMakie.scatter!(ax6, mean_atr_diff[rois], mean_atr_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
+        CairoMakie.scatter!(ax4, mean_ab_diff[rois], mean_ab_sol_diff[rois], color=cmap[i], markersize=20 , label=labels[i])
+        CairoMakie.scatter!(ax5, mean_tau_diff[rois], mean_tau_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
+        CairoMakie.scatter!(ax6, mean_atr_diff[rois], mean_atr_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
     end
     Legend(f[2,:], ax6, framevisible = false, unique=true, labelsize=35, nbanks=5, tellheight=true)
 
@@ -288,32 +296,45 @@ begin
 end
 save(projectdir("output/plots/inference-results/pst-pred-harmonised-scaled.pdf"),f)
 
-# pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-ind-diag-1x1000.jls"));
-# summarize(pst)
-# meanpst = mean(pst)
+pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-ind-diag-1x1000.jls"));
+summarize(pst)
+meanpst = mean(pst);
 
-# using CairoMakie; CairoMakie.activate!()
+using CairoMakie; CairoMakie.activate!()
 
-# mtl_regions = ["entorhinal", "Left-Amygdala", "Right-Amygdala"] 
-# mtl = findall(x -> x ∈ mtl_regions, get_label.(cortex)) 
-# neo_regions = ["inferiortemporal", "middletemporal"] 
-# neo = findall(x -> x ∈ neo_regions, get_label.(cortex))
+mtl_regions = ["entorhinal", "Left-Amygdala", "Right-Amygdala"]
+mtl = findall(x -> x ∈ mtl_regions, get_label.(cortex)) 
+neo_regions = ["inferiortemporal", "middletemporal"] 
+neo = findall(x -> x ∈ neo_regions, get_label.(cortex))
 
-# rois = mtl
-# ms = [mean(pst["β[$i]"]) for i in 1:44]
-# stds = [std(pst["β[$i]"]) for i in 1:44]
-# mean_tau_inits = [[mean(fbb_tau_inits[i][rois]) for i in 1:22]; [mean(fbp_tau_inits[i][rois]) for i in 1:22]]
-# mean_ab_inits = [[mean(fbb_inits[i][rois]) for i in 1:22]; [mean(fbp_its[i][rois]) for i in 1:22]]
+rois = [mtl ; neo]
+ms = [mean(pst["β[$i]"]) for i in 1:44]
+gms = [mean(pst["α_t[$i]"]) for i in 1:44]
 
-# scatter(ms, mean_ab_inits)
-# scatter(stds,  mean_ab_inits .* mean_tau_inits)
-# scatter(stds, mean_ab_inits)
-# scatter(stds, mean_tau_inits)
+cs =[cov(vec(pst["β[$i]"]), vec(pst["α_t[$i]"])) for i in 1:44]
+stds = [std(pst["β[$i]"]) for i in 1:44]
+mean_tau_inits = [[mean(fbb_tau_inits[i][rois]) for i in 1:22]; [mean(fbp_tau_inits[i][rois]) for i in 1:22]]
+mean_ab_inits = [[mean(fbb_inits[i][rois]) for i in 1:22]; [mean(fbp_inits[i][rois]) for i in 1:22]]
+total_tau =  [[sum(fbb_tau_inits[i]) for i in 1:22]; [sum(fbp_tau_inits[i]) for i in 1:22]]
+tota_ab = [[sum(fbb_inits[i]) for i in 1:22]; [sum(fbp_inits[i]) for i in 1:22]]
 
-# using GLMakie; GLMakie.activate!()
-# begin
-#     f = Figure(size=(500, 600))
-#     ax = Axis3(f[1,1], xlabel="ms", ylabel="stds", zlabel="tau inits")
-#     scatter!(ms, stds, mean_tau_inits .* mean_ab_inits)    
-#     f
-# end
+scatter(ms, gms)
+scatter(cs, stds)
+scatter(ms[1:22], cs[1:22])
+scatter(ms[23:44], cs[23:44])
+scatter(ms, stds)
+scatter(ms, mean_tau_inits)
+scatter(ms, mean_ab_inits .* mean_tau_inits)
+scatter(stds, mean_ab_inits .* mean_tau_inits)
+scatter(stds, mean_ab_inits)
+scatter(stds, mean_tau_inits)
+
+using GLMakie; GLMakie.activate!()
+begin
+    f = Figure(size=(500, 600))
+    ax = Axis3(f[1,1], xlabel="ms", ylabel="stds", zlabel="tau inits")
+    # scatter!(ms[1:22], stds[1:22], (mean_tau_inits .* mean_ab_inits)[1:22], markersize=10, color=:blue)
+    # scatter!(ms[23:44], stds[23:44], (mean_tau_inits .* mean_ab_inits)[23:44], markersize=10, color=:red)
+    scatter(ms, gms, cs)
+    f
+end

@@ -90,4 +90,47 @@ begin
     display(f)
 end
 
-pst = chainscat([deserialize("/Users/pavanchaggar/Projects/abtau/analysis/output/chains/beta-chains/031124/atn-noatr-beta-$i-1000-ln.jls") for i in 1:4]...)
+begin
+    using CairoMakie; CairoMakie.activate!()
+    pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-1x1000.jls"));
+    
+    colors = Makie.wong_colors();
+    titlesize=35
+    f = Figure(size=(1200, 300), fontsize=20, figure_padding = 25, )
+    g = [f[1, i] = GridLayout() for i in 1:5]
+
+    ax = Axis(g[1][1,1], xticks=0:0.2:0.4,   xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title=L"\alpha", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+    hidespines!(ax, :l, :t, :r)
+    hideydecorations!(ax, label=false)
+    CairoMakie.xlims!(ax, 0.0,0.5)
+    hist!(vec(Array(pst[:Am_a])), bins=15, color=alphacolor(colors[1], 1.0), strokecolor=:white, strokewidth=1)
+    
+    ax = Axis(g[2][1,1], xticks=0:0.04:0.08,  xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title=L"\rho", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+    hidespines!(ax, :l, :t, :r)
+    hideydecorations!(ax, label=false)
+    xlims!(ax, 0.0,0.1)
+    hist!(vec(Array(pst[:Pm_t])), bins=15, color=alphacolor(colors[1], 1.0), strokecolor=:white, strokewidth=1)
+    
+    ax = Axis(g[3][1,1],  xticks=0:0.05:0.1,  xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title=L"\gamma", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+    hidespines!(ax, :l, :t, :r)
+    hideydecorations!(ax, label=false)
+    xlims!(ax, 0.0,0.125)
+    hist!(vec(Array(pst[:Am_t])), bins=15,color=alphacolor(colors[1], 1.0), strokecolor=:white, strokewidth=1)
+    
+    ax = Axis(g[4][1,1], xticks=0.0:0.05:0.1,  xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title=L"\eta", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+    hidespines!(ax, :l, :t, :r)
+    hideydecorations!(ax, label=false)
+    xlims!(ax, 0.0,0.125)
+    hist!(vec(Array(pst[:Em])), bins=15, color=alphacolor(colors[1], 1.0), strokecolor=:white, strokewidth=1)
+
+    ax = Axis(g[5][1,1], xticks=3:1:6.5, titlesize=titlesize, title=L"\beta", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+    hidespines!(ax, :l, :t, :r)
+    hideydecorations!(ax, label=false)
+    xlims!(ax, 3,6.5)
+    hist!(vec(Array(pst[:β])), bins=15,color=alphacolor(colors[1], 1.0), strokecolor=:white, strokewidth=1)
+
+    colgap!(f.layout, 20)
+
+    display(f)
+end
+save(projectdir("output/plots/inference-results/pst-harmonised-scaled.pdf"),f)

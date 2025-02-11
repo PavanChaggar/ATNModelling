@@ -7,7 +7,8 @@ using CSV: read
 using DataFrames: DataFrame
 using DrWatson: projectdir, datadir
 using DelimitedFiles: readdlm
-
+using Connectomes: Parcellation, get_label, get_node_id, get_hemisphere, get_lobe
+using Turing: mean
 """
     load_ab_params()
 
@@ -280,5 +281,94 @@ function success_condition(retcodes)
     allequal(retcodes) && retcodes[1] == 1
 end
 
+function calculate_colocalisation_order(parc::Parcellation, pst, model, inits, tau_threshold, ab_threshold)
+    nodes = length(parc)
+    
+    meanpst = mean(pst)
+    params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], meanpst[:β, :mean], meanpst[:Em, :mean]
+
+    sol = simulate(model, inits, (0, 200), params, saveat=0.01)
+
+    asol = Array(sol)
+    ab_sol = asol[1:nodes,:]
+    tau_sol = asol[collect(1:nodes) .+ nodes,:]
+
+    tau_seed = findall(x -> x >= tau_threshold, tau_sol)
+    tau_seed_idx = zeros(nodes, size(asol,2))
+    tau_seed_idx[tau_seed] .= 1.0
+
+    ab_seed = findall(x -> x >= ab_threshold, ab_sol)
+    ab_seed_idx = zeros(nodes, size(asol,2))
+    ab_seed_idx[ab_seed] .= 1.0
+
+    ab_tau_coloc = tau_seed_idx .* ab_seed_idx
+
+    ab_tau_coloc_time = Vector{Float64}()
+    for i in eachrow(ab_tau_coloc)
+        push!(ab_tau_coloc_time, sol.t[findfirst(x -> x == 1, i)])
+    end
+
+    df = DataFrame(RegionID = collect(1:nodes), 
+                   DKTID = get_node_id.(parc), 
+                   Region = get_label.(parc), 
+                   Hemisphere = get_hemisphere.(parc),
+                   Coloc_time = ab_tau_coloc_time)
+    sorted_df = sort(df, :Coloc_time)
+    sorted_df.Order = 1:nodes
+    return sorted_df
+end
+
+
+function find_seed(parc, sols, tau_cutoff, ab_cutoff)
+
+    nodes = length(parc)
+    seeds = Vector{Vector{Int64}}()
+    for sol in sols
+        asol = Array(sol)
+        ab_sol = asol[1:nodes,:]
+        tau_sol = asol[collect(1:nodes) .+ nodes,:]
+
+        tau_seed = findall(x -> x >= tau_cutoff, tau_sol)
+        tau_seed_idx = zeros(nodes, size(asol,2))
+        tau_seed_idx[tau_seed] .= 1.0
+
+        ab_seed = findall(x -> x >= ab_cutoff, ab_sol)
+        ab_seed_idx = zeros(nodes, size(asol,2))
+        ab_seed_idx[ab_seed] .= 1.0
+
+        
+        ab_tau_coloc = tau_seed_idx .* ab_seed_idx
+        init_idx = findfirst(x -> x > 0, sum(ab_tau_coloc, dims=1))
+        if init_idx isa Nothing
+            continue
+        end
+        push!(seeds, findall(x -> x == 1, ab_tau_coloc[:,init_idx[2]]))
+    end
+    return seeds
+end
+
+
+function calculate_colocalisation_prob(parc, pst, model, inits)
+    sols = [simulate(model, inits, (0, 200), params, saveat=0.1) 
+                    for params in zip( vec(pst[:Am_a]), vec(pst[:Pm_t]), vec(pst[:Am_t]), vec(pst[:β]), vec(pst[:Em]))];
+
+    seed_idx = reduce(vcat, find_seed(parc, sols, 0.1, 0.9))
+
+    nodes = length(parc)
+    seed_count = zeros(nodes)
+    seed_count[unique(seed_idx)] .= [count(==(i), seed_idx) for i in unique(seed_idx)]
+    seed_prob = seed_count ./ length(seed_idx)
+    init_seed_idx = findall(x -> x > 0, seed_prob)
+
+    seed_prob[init_seed_idx]
+
+   df =  DataFrame(DKTID = get_node_id.(parc), 
+                   Seed = get_label.(parc), 
+                   Hemisphere = get_hemisphere.(parc), 
+                   Seed_prob = seed_prob, 
+                   lobe=get_lobe.(parc))
+    
+    return sort(df, :Seed_prob)
+end
 
 end

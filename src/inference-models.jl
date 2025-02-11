@@ -208,6 +208,64 @@ end
 end
 
 
+@model function ensemble_atn_harmonised_tracer(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
+                                        fbp_prob, fbp_inits, fbp_times, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
+    σ_fbb  ~ InverseGamma(2,3)
+    σ_fbp  ~ InverseGamma(2,3)
+    σ_t  ~ InverseGamma(2,3)
+    σ_v  ~ InverseGamma(2,3)
+
+    Am_a ~ truncated(Normal(0, 1), lower=0)
+    As_a ~ truncated(Normal(0, 1), lower=0)
+
+    Pm_t ~ truncated(Normal(0, 1), lower=0)
+    Ps_t ~ truncated(Normal(0, 1), lower=0)
+
+    Am_t ~ truncated(Normal(0, 1), lower=0)
+    As_t ~ truncated(Normal(0, 1), lower=0)
+
+    Em   ~ truncated(Normal(0, 1), lower=0)
+    Es   ~ truncated(Normal(0, 1), lower=0)
+
+    β    ~ truncated(Normal(3.5, 3.0), lower=0.)
+
+    α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
+    ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
+    α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
+    η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
+
+    fbb_ensemble_prob = EnsembleProblem(fbb_prob, 
+    prob_func=make_atn_prob_func(fbb_inits, α_a[fbb_idx], ρ_t[fbb_idx], α_t[fbb_idx], β, η[fbb_idx], fbb_times), 
+                                 output_func=atn_output_func)
+
+    fbb_esol = solve(fbb_ensemble_prob, Tsit5(), verbose=false, abstol = 1e-6, reltol = 1e-6, trajectories=fbb_n)
+
+    fbp_ensemble_prob = EnsembleProblem(fbp_prob, 
+    prob_func=make_atn_prob_func(fbp_inits, α_a[fbp_idx], ρ_t[fbp_idx], α_t[fbp_idx], β, η[fbp_idx], fbp_times), 
+                                 output_func=atn_output_func)
+
+    fbp_esol = solve(fbp_ensemble_prob, Tsit5(), verbose=false, abstol = 1e-6, reltol = 1e-6, trajectories=fbp_n)
+
+    if !success_condition(get_retcodes(fbb_esol)) && !success_condition(get_retcodes(fbp_esol))
+        Turing.@addlogprob! -Inf
+        println("failed")
+        return nothing
+    end
+
+    fbb_preds, fbb_tau_preds, fbb_vol_preds =  split_sols_ensemble(fbb_esol, fbb_ab_tidx, fbb_tau_tidx)
+
+    fbp_preds, fbp_tau_preds, fbp_vol_preds =  split_sols_ensemble(fbp_esol, fbp_ab_tidx, fbp_tau_tidx)
+
+    fbb_data ~ MvNormal(fbb_preds, σ_fbb^2 * I)
+    fbb_tau_data ~ MvNormal(fbb_tau_preds, σ_t^2 * I)
+    fbb_vol_data ~ MvNormal(fbb_vol_preds, σ_v^2 * I) 
+
+    fbp_data ~ MvNormal(fbp_preds, σ_fbp^2 * I)
+    fbp_tau_data ~ MvNormal(fbp_tau_preds, σ_t^2 * I)
+    fbp_vol_data ~ MvNormal(fbp_vol_preds, σ_v^2 * I) 
+end
+
+
 @model function ensemble_atn_harmonised_individual(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
     fbp_prob, fbp_inits, fbp_times, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
     σ_a  ~ InverseGamma(2,3)

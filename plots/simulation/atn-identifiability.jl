@@ -7,7 +7,7 @@ begin
     psts = Vector{Chains}()
     for t in ts_slide
         _ts = Int.(extrema(t))
-        _pst = deserialize(projectdir("output/chains/atn-identifiability/pst-$(_ts[1])-$(_ts[end]).jls"))
+        _pst = deserialize(projectdir("output/chains/atn-identifiability/pst-t$(_ts[1])-$(_ts[1])-$(_ts[end]).jls"))
         println((sum(_pst[:numerical_error])))
         push!(psts, _pst)
     end

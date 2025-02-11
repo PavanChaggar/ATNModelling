@@ -18,7 +18,7 @@ using Serialization
 # --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
-tracer = "FBB"
+tracer = "FBP"
 u0, ui = load_ab_params(tracer=tracer)
 ui_diff = ui .- u0
 v0, vi, part = load_tau_params()
