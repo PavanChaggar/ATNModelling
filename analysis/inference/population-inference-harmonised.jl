@@ -152,9 +152,9 @@ pst()
 Random.seed!(1234)
 
 println("Starting Inference")
-samples = sample(pst, Turing.NUTS(0.8, metricT=AdvancedHMC.DenseEuclideanMetric), MCMCSerial(), n_samples, n_chains)
+samples = sample(pst, Turing.NUTS(0.8), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 
 display(summarize(samples))
 
-serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-suvr-dense-$(n_chains)x$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-suvr-diag-$(n_chains)x$(n_samples).jls"), samples)
