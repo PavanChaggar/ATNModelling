@@ -15,7 +15,11 @@ using Turing: mean
 Return a vector of regional baseline valukes and carrying capacities for amyloid.
 """
 function load_ab_params(;tracer="FBP")
-    ab_params = read(projectdir(joinpath("output/analysis-derivatives/ab-derivatives/", tracer, "ab-params.csv")), DataFrame)
+    if tracer == "FBB" || tracer == "FBP"
+        ab_params = read(projectdir(joinpath("output/analysis-derivatives/ab-derivatives/", tracer, "ab-params.csv")), DataFrame)
+    elseif tracer == "FMM"
+        ab_params = read(projectdir("output/bf-output/ab-derivatives/ab-params.csv"), DataFrame)
+    end
     return ab_params.u0, ab_params.ui
 end
 
@@ -25,9 +29,14 @@ end
 Return a vector of regional baseline valukes, carrying capacities and PART 
 capacities for tau.
 """
-function load_tau_params()
-    tau_params = read(datadir("derivatives/tau-params.csv"), DataFrame)
-    sympart = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/pypart-sym.csv")) |> vec
+function load_tau_params(;tracer="FTP")
+    if tracer == "FTP"
+        tau_params = read(datadir("derivatives/tau-params.csv"), DataFrame)
+        sympart = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/pypart-sym.csv")) |> vec
+    elseif tracer == "RO"
+        tau_params = read(projectdir("output/bf-output/tau-derivatives/tau_params.csv"), DataFrame)
+        sympart = readdlm(projectdir("output/bf-output/tau-derivatives/pypart-sym.csv")) |> vec
+    end
     return tau_params.v0, tau_params.vi, sympart
 end
 
@@ -43,6 +52,10 @@ function conc(v, v0, vi)
     else
         (v - v0) / (vi - v0)
     end 
+end
+
+function dose(c, t)
+    c * exp(-mod(t, 3))
 end
 
 function make_scaled_atn_model(ui, part, L)
@@ -79,6 +92,23 @@ function make_scaled_atn_model_hemisphere(ui, part, L)
     return ODEFunction(atn)
 end
 
+function make_scaled_atn_pkpd_model(ui, part, L, Ld, m)
+    function atn_pkpd(D, x, p, t)
+        u = @view x[1:36]
+        v = @view x[37:72]
+        a = @view x[73:108]
+        d = @view x[109:end]
+        
+        α_a, ρ_t, α_t, β, η, ρ_d, α_d, α_c, λ_d = p
+         
+        vi = part .+ (β .* u) #.* ( 1 .- a )
+        D[1:36] .= α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
+        D[37:72] .= -ρ_t * L * v .+ α_t .* vi .* v .* (1 .- v)
+        D[73:108] .= η .* v .* ( 1 .- a )
+        D[109:end] .= -ρ_d * Ld * d .+ dose(α_c, t) .* m .- λ_d .* d 
+    end
+    return ODEFunction(atn_pkpd)
+end
 """
    make_atn_model(u0, ui, v0, part, L)
 

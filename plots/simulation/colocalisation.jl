@@ -127,7 +127,8 @@ end
 save(projectdir("output/plots/colocalisation/ab_progression.pdf"), f)
 
 begin
-    f = Figure(size = (650, 350), fontsize=20)
+    CairoMakie.activate!()
+    f = Figure(size = (1200, 350), fontsize=20)
     ax = Axis(f[1,1], xlabel="t / years", ylabel="Concentration", title="Amyloid Progression",
     yticks=0:0.2:1.0, xticks=0:20:150, yticksize=5)
     CairoMakie.xlims!(ax, 0.0, 80)

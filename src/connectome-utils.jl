@@ -3,11 +3,12 @@ module ConnectomeUtils
 using Connectomes: Connectome, Parcellation, 
                    connectome_path, node2FS, get_node_id, 
                    get_lobe, filter, laplacian_matrix, slice,
-                   FS2Connectome
+                   FS2Connectome, get_hemisphere, get_coords
 using DrWatson: datadir
 using FileIO
-dktdict = node2FS()
+using LinearAlgebra
 
+dktdict = node2FS()
 """
     get_parcellation()
 
@@ -64,6 +65,22 @@ function get_braak_regions()
     ks = ["1", "2/3", "4", "5", "6"]
     fs_braak_stages = [braak_dict[k] for k in ks]    
     return map(_getbraak, fs_braak_stages)
+end
+
+distance(x::Vector{Float64}, y::Vector{Float64}) = norm(x .- y, 2)
+
+function get_distance_laplacian(; hemisphere = "right")
+    parc = get_parcellation() |> get_cortex
+    cortex = filter(x -> get_hemisphere(x) == hemisphere, parc)
+
+    coords = get_coords(cortex)
+
+    distance_matrix = reduce(hcat, [[distance(coords[j,:], coords[i,:]) for i in 1:36] for j in 1:36])
+    inv_distance_matrix = replace(1 ./ (distance_matrix).^2, Inf => 0)
+    _D = inv_distance_matrix ./ maximum(inv_distance_matrix)
+    Ld = diagm(_D * ones(36)) - _D
+
+    return Ld
 end
 
 end
