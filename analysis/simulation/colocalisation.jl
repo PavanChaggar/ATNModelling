@@ -50,6 +50,7 @@ ab_inits = [d[:,1] for d in ab_conc]
 _mean_ab_init = mean(ab_inits)
 _mean_ab_init_sym = (_mean_ab_init[1:36] .+ _mean_ab_init[37:end]) ./ 2
 mean_ab_init = [_mean_ab_init_sym; _mean_ab_init_sym]
+mean_ab_init = _mean_ab_init
 
 max_norm(c) =  c ./ maximum(c);
 # --------------------------------------------------------------------------------
@@ -63,6 +64,7 @@ tau_inits = [d[:,1] for d in tau_conc]
 _mean_tau_init = mean(tau_inits)
 _mean_tau_init_sym = (_mean_tau_init[1:36] .+ _mean_tau_init[37:end]) ./ 2
 mean_tau_init = [_mean_tau_init_sym; _mean_tau_init_sym]
+mean_tau_init = _mean_tau_init
 
 filtered_tau_idx = findall(x -> x < 0.05, mean_tau_init)
 mean_tau_init[filtered_tau_idx] .= 0
@@ -88,9 +90,9 @@ for (hem_idx, hem) in zip([1:36, 37:72, 1:72], ["right", "left", "all"])
     
     ab_tau_coloc_time = calculate_colocalisation_order(_cortex, pst, atn_model, inits, 0.1, 0.9)
 
-    CSV.write(projectdir("output/analysis-derivatives/colocalisation/colocalisation-order-" * hem * ".csv"), ab_tau_coloc_time)
+    CSV.write(projectdir("output/analysis-derivatives/colocalisation/colocalisation-assymertic-inits-order-" * hem * ".csv"), ab_tau_coloc_time)
 
     ab_tau_coloc_order = calculate_colocalisation_prob(_cortex, pst, atn_model, inits)
 
-    CSV.write(projectdir("output/analysis-derivatives/colocalisation/colocalisation-prob-" * hem * ".csv"), ab_tau_coloc_order)
+    CSV.write(projectdir("output/analysis-derivatives/colocalisation/colocalisation-assymertic-inits-prob-" * hem * ".csv"), ab_tau_coloc_order)
 end
