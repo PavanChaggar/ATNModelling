@@ -12,7 +12,7 @@ using DrWatson: projectdir, datadir
 #-----------------------------------------------------------------------
 # Ab integration
 #-----------------------------------------------------------------------
-tracer = "FBB"
+tracer = "FBP"
 ab_coeffs = readdlm(projectdir("output/analysis-derivatives/ab-derivatives/$(tracer)/ab-polynomial-coeffs.csv"))
 
 f = Polynomial(vec(ab_coeffs))
@@ -42,7 +42,7 @@ save(projectdir("output/plots/population-analysis/ab-integrated-$(tracer).pdf"),
 data_path = datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv");
 
 data_df = CSV.read(data_path, DataFrame);
-fbp_data = filter(x -> x.TRACER == "FBB", data_df);
+fbp_data = filter(x -> x.TRACER == tracer, data_df);
 dropmissing!(fbp_data, :AMYLOID_STATUS_COMPOSITE_REF)
 abpos_df = filter(x -> x["AMYLOID_STATUS_COMPOSITE_REF"] ∈ [0, 1], fbp_data)
 dktnames = get_parcellation() |> get_cortex |> get_dkt_names;

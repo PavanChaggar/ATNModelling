@@ -1,23 +1,23 @@
-using ATNModelling.SimulationUtils: make_scaled_atn_pkpd_model, 
-                                    simulate, load_ab_params, load_tau_params, conc
-using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names, 
-                                    get_distance_laplacian
+using ATNModelling.SimulationUtils: make_prob, make_scaled_atn_model, 
+                                    simulate, resimulate, simulate_amyloid,
+                                    load_ab_params, load_tau_params, conc, make_scaled_atn_pkpd_model
+using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names, get_distance_laplacian, get_braak_regions
+using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
 
-using Connectomes: laplacian_matrix, get_label, get_hemisphere, get_node_id, plot_roi!
-using DifferentialEquations
-using CairoMakie, GLMakie, ColorSchemes, Colors
-using DrWatson
+using Connectomes: laplacian_matrix, get_label, get_hemisphere
+using ADNIDatasets: ADNIDataset, get_id, get_dates, get_initial_conditions, calc_suvr, get_vol, get_times
+using DrWatson: projectdir, datadir
+using CSV, DataFrames
+using CairoMakie
 # --------------------------------------------------------------------------------
 # Tracer independent data
 # --------------------------------------------------------------------------------
 v0, vi, part = load_tau_params()
-u0, ui = load_ab_params(tracer="FBB")
 parc = get_parcellation() |> get_cortex
 cortex = filter(x -> get_hemisphere(x) == "right", parc)
 
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
 L = laplacian_matrix(c) 
-dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 Lh = L[1:36, 1:36]
 Ld = get_distance_laplacian()
 
@@ -26,57 +26,174 @@ m = zeros(36)
 m[cingulate] .= 1
 m[[35,36]] .= 1
 
-amyloid_production = 0.2
-tau_transport = 0.01
-tau_production = 0.04
-coupling = 4.5
-atrophy = 0.05
-drug_concentration = 10.
-drug_transport = 0.1
-drug_effect = 0.05
-drug_clearance = 0.1
+dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 
-tau_init = zeros(36)
-tau_init[27] = 0.2
-atn_pkpd = make_scaled_atn_pkpd_model(ui[1:36] .- u0[1:36], part[1:36], Lh, Ld, m, 0)
+for st in ([0,0], [1,0], [1,1])
+    # Amyloid data 
+    _ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
+    _tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
+
+    tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
+    tau_pos_df = filter(x ->  x.MTL_Status == st[1] && x.NEO_Status == st[2], tau_data_df);
+    tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
+    IDS = unique(tau_pos_df.RID)
+    # --------------------------------------------------------------------------------
+    # Load fbb data
+    # --------------------------------------------------------------------------------
+    tracer="FBB"
+    
+    fbb_u0, fbb_ui = load_ab_params(tracer=tracer)
+    fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.RID ∈ IDS, _ab_data_df)
+    fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COMPOSITE_REF")
+
+    fbb_suvr = calc_suvr.(fbb_data)
+    normalise!(fbb_suvr, fbb_u0, fbb_ui)
+    fbb_conc = map(x -> conc.(x, fbb_u0, fbb_ui), fbb_suvr)
+    fbb_inits = [d[:,1] for d in fbb_conc]
+    mean_fbb_inits = mean(fbb_inits)[1:36]
+    println("ab concentration = $(mean_fbb_inits[29])")
+
+    fbb_tau_suvr = calc_suvr.(tau_data)
+    normalise!(fbb_tau_suvr, v0, vi)
+    fbb_tau_conc = map(x -> conc.(x, v0, vi), fbb_tau_suvr)
+    fbb_tau_inits = [d[:,1] for d in fbb_tau_conc]
+    mean_tau_inits = mean(fbb_tau_inits)[1:36]
+    println("tau concentration = $(mean_tau_inits[29])")
+
+    vol_inits = zeros(36)
+
+    atn_pkpd = make_scaled_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36], Lh, Ld, m)
+
+    ts = range(0, 60, 600)
+
+    amyloid_production = 0.2
+    tau_transport = 0.04
+    tau_production = 0.05
+    coupling = 4.5
+    atrophy = 0.05
+    drug_concentration = 10.
+    drug_transport = 0.1
+    drug_effect = 0.05
+    drug_clearance = 0.1
+
+    sol = simulate(atn_pkpd, [mean_fbb_inits; mean_tau_inits; vol_inits; zeros(36)], 
+                    (0.0, 60.0), [amyloid_production, tau_transport, tau_production, 
+                                            coupling, atrophy, 
+                                            drug_transport, drug_effect, 
+                                            drug_concentration, drug_clearance]; 
+                                            saveat=ts, tol=1e-9)
+
+    absol = Array(sol[1:36,:])
+    tausol = Array(sol[37:72,:])
+    atrsol = Array(sol[73:108,:])
+    drugsol = Array(sol[109:end,:]) ./ maximum(Array(sol[109:end,:]))
+
+    begin
+        CairoMakie.activate!()
+        cmap = Makie.wong_colors()
+        f = Figure()
+        ax1 = Axis(f[1,1], ylabel="Amyloid Conc", ytickformat="{:.0f}")
+        hidexdecorations!(ax1, grid=false)
+        ylims!(ax1, 0.0, 1.05)
+        ax2 = Axis(f[2,1], ylabel="Tau Conc", ytickformat="{:.0f}", xlabel="Time / Months")
+        hidexdecorations!(ax2, grid=false)
+        ylims!(ax2, 0.0, 1.05)
+        ax3 = Axis(f[3,1], ylabel="Atr", ytickformat="{:.0f}", xlabel="Time / Months")
+        ylims!(ax3, 0.0, 1.05)
+        hidexdecorations!(ax3, grid=false)
+        ax4 = Axis(f[4,1], ylabel="Drug Conc", ytickformat="{:.0f}", xlabel="Time / Months")
+        ylims!(ax4, 0.0, 1.05)
+        for i in 1:36
+            lines!(ax1, sol.t, absol[i,:], color=cmap[1])
+            lines!(ax2, sol.t, tausol[i,:], color=cmap[1])
+            lines!(ax3, sol.t, atrsol[i,:], color=cmap[1])
+            lines!(ax4, sol.t, drugsol[i,:], color=cmap[1])
+        end
+        display(f)
+    end
+end
+
+# Amyloid data 
+_ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
+_tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
+
+tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
+tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 0, tau_data_df);
+tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
+IDS = unique(tau_pos_df.RID)
+# --------------------------------------------------------------------------------
+# Load fbb data
+# --------------------------------------------------------------------------------
+tracer="FBB"
+
+fbb_u0, fbb_ui = load_ab_params(tracer=tracer)
+fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.RID ∈ IDS, _ab_data_df)
+fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COMPOSITE_REF")
+
+fbb_suvr = calc_suvr.(fbb_data)
+normalise!(fbb_suvr, fbb_u0, fbb_ui)
+fbb_conc = map(x -> conc.(x, fbb_u0, fbb_ui), fbb_suvr)
+fbb_inits = [d[:,1] for d in fbb_conc]
+mean_fbb_inits = mean(fbb_inits)[1:36]
+println("ab concentration = $(mean_fbb_inits[29])")
+
+fbb_tau_suvr = calc_suvr.(tau_data)
+normalise!(fbb_tau_suvr, v0, vi)
+fbb_tau_conc = map(x -> conc.(x, v0, vi), fbb_tau_suvr)
+fbb_tau_inits = [d[:,1] for d in fbb_tau_conc]
+mean_tau_inits = mean(fbb_tau_inits)[1:36]
+mean_tau_inits[findall(x -> x < 0.05, mean_tau_inits)] .= 0 
+println("tau concentration = $(mean_tau_inits[29])")
+
+vol_inits = zeros(36)
+
+atn_pkpd = make_scaled_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36], Lh, Ld, m, 16)
 
 ts = range(0, 60, 600)
 
-sol = simulate(atn_pkpd, [zeros(36) .+ 0.25; tau_init; zeros(72)], 
+amyloid_production = 0.2
+tau_transport = 0.04
+tau_production = 0.05
+coupling = 4.5
+atrophy = 0.05
+drug_concentration = 10.
+drug_transport = 0.25
+drug_effect = 0.05
+drug_clearance = 0.1
+
+sol = simulate(atn_pkpd, [mean_fbb_inits; mean_tau_inits; vol_inits; zeros(36)], 
                 (0.0, 60.0), [amyloid_production, tau_transport, tau_production, 
                                         coupling, atrophy, 
                                         drug_transport, drug_effect, 
                                         drug_concentration, drug_clearance]; 
                                         saveat=ts, tol=1e-9)
 
-solts = simulate(atn_pkpd, [zeros(36) .+ 0.25; tau_init; zeros(72)], 
-                (0.0, 60.0), [amyloid_production, tau_transport, tau_production, 
-                        coupling, atrophy, 
-                        drug_transport, drug_effect, 
-                        drug_concentration, drug_clearance]; 
-                        saveat=collect(0:30:60))
-
-placebo_sol = simulate(atn_pkpd, [zeros(36) .+ 0.25; tau_init; zeros(72)], 
-                (0.0, 60.0), [amyloid_production, tau_transport, tau_production, 
-                                        coupling, atrophy, 
-                                        drug_transport, 0.0, 
-                                        drug_concentration, drug_clearance]; 
-                                        saveat=ts)
-
-placebo_solts = simulate(atn_pkpd, [zeros(36) .+ 0.25; tau_init; zeros(72)], 
-                (0.0, 60.0), [amyloid_production, tau_transport, tau_production, 
-                        coupling, atrophy, 
-                        drug_transport, 0.0, 
-                        drug_concentration, drug_clearance]; 
-                        saveat=collect(0:30:60))
-
 absol = Array(sol[1:36,:])
 tausol = Array(sol[37:72,:])
 atrsol = Array(sol[73:108,:])
 drugsol = Array(sol[109:end,:]) ./ maximum(Array(sol[109:end,:]))
 
+tau_seed = findall(x -> x >= 0.1, tausol)
+tau_seed_idx = zeros(36, size(sol,2))
+tau_seed_idx[tau_seed] .= 1.0
+
+ab_seed = findall(x -> x >= 0.9, absol)
+ab_seed_idx = zeros(36, size(sol,2))
+ab_seed_idx[ab_seed] .= 1.0
+
+ab_tau_coloc = tau_seed_idx .* ab_seed_idx
+
+coloc_t = findfirst(x -> x == 1, sum(ab_tau_coloc, dims=1))
+coloc_node = findall(x -> x > 0, ab_tau_coloc[:, coloc_t[2]])
+dktnames[coloc_node]
+sol.t[coloc_t[2]]
+
+bs = get_braak_regions()
+rbs = [filter(x -> x < 37, b) for b in bs]
+
 begin
     CairoMakie.activate!()
+    cmap = Makie.wong_colors()
     f = Figure()
     ax1 = Axis(f[1,1], ylabel="Amyloid Conc", ytickformat="{:.0f}")
     hidexdecorations!(ax1, grid=false)
@@ -89,13 +206,17 @@ begin
     hidexdecorations!(ax3, grid=false)
     ax4 = Axis(f[4,1], ylabel="Drug Conc", ytickformat="{:.0f}", xlabel="Time / Months")
     ylims!(ax4, 0.0, 1.05)
-    for i in 1:36
-        lines!(ax1, sol.t, absol[i,:])
-        lines!(ax2, sol.t, tausol[i,:])
-        lines!(ax3, sol.t, atrsol[i,:])
-        lines!(ax4, sol.t, drugsol[i,:])
+    
+    for (i, j) in enumerate(rbs)
+        lines!(ax1, sol.t, vec(mean(absol[j,:], dims=1)), linewidth=3, color=(cmap[i], 0.9))        
+        hlines!(ax1, 0.8, color=:red, linestyle=:dash)
+        lines!(ax2, sol.t, vec(mean(tausol[j,:], dims=1)), linewidth=3, color=(cmap[i], 0.9))
+        hlines!(ax2, 0.2, color=:red, linestyle=:dash)
+        lines!(ax3, sol.t, vec(mean(atrsol[j,:], dims=1)), linewidth=3, color=(cmap[i], 0.9))
+        lines!(ax4, sol.t, vec(mean(drugsol[j,:], dims=1)), linewidth=3, color=(cmap[i], 0.9))
     end
-    f
+    vlines!(ax2, sol.t[coloc_t[2]], color=:red)
+    display(f)
 end
 
 begin 

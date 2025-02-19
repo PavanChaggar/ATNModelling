@@ -98,6 +98,37 @@ begin
     
 end
 save(projectdir("output/plots/colocalisation/mean_tau_aptn.jpeg"), f, px_per_unit=2.0)
+
+
+begin
+    GLMakie.activate!()
+    cmap = ColorSchemes.viridis
+    
+    f = Figure(size = (1200, 250), figure_padding = 20, fontsize=25)
+    val = mean_ab_init[1:36]
+    ax = Axis3(f[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(get_node_id.(right_cortex), max_norm(val) , cmap)
+    
+    ax = Axis3(f[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(get_node_id.(right_cortex), max_norm(val), cmap)
+
+    val = mean_tau_init[1:36]
+    ax = Axis3(f[1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(get_node_id.(right_cortex), max_norm(val) , cmap)
+    
+    ax = Axis3(f[1,4], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(get_node_id.(right_cortex), max_norm(val), cmap)
+    Colorbar(f[1, 0], colormap=cmap, limits=(0,0.5), ticks=0:0.1:0.5,
+             ticklabelsize=20, ticksize=10, label="Concentration", vertical = true, flipaxis = false)
+    
+end
+save(projectdir("output/plots/colocalisation/mean_ab_tau_aptn.jpeg"), f, px_per_unit=2.0)
+
+
 # --------------------------------------------------------------------------------
 # Modelling!
 # --------------------------------------------------------------------------------
@@ -130,7 +161,7 @@ begin
     CairoMakie.activate!()
     f = Figure(size = (1200, 350), fontsize=20)
     ax = Axis(f[1,1], xlabel="t / years", ylabel="Concentration", title="Amyloid Progression",
-    yticks=0:0.2:1.0, xticks=0:20:150, yticksize=5)
+    yticks=0:0.2:1.0, xticks=0:20:150, yticksize=5, ylabelsize=25, xlabelsize=25)
     CairoMakie.xlims!(ax, 0.0, 80)
     CairoMakie.ylims!(ax, 0.0, 1.05)
     hlines!(ax, 0.9, color=:grey, linestyle=:dash, linewidth=3)
@@ -141,7 +172,7 @@ begin
     lines!(sol.t, Array(sol)[27, :], color=(:blue, 0.75), linewidth=3)
 
     ax = Axis(f[1,2], xlabel="t / years", ylabel="Concentration", title="Tau Progression",
-              yticks=0:0.2:1.0, xticks=0:20:100, yticksize=5)
+              yticks=0:0.2:1.0, xticks=0:20:100, yticksize=5, ylabelsize=25, xlabelsize=25)
     hideydecorations!(ax, grid=false, ticks=false)
     CairoMakie.xlims!(ax, 0.0, 80)
     CairoMakie.ylims!(ax, 0.0, 1.05)
@@ -162,7 +193,7 @@ left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/coloca
 
 begin
     GLMakie.activate!()
-    cmap = ColorSchemes.rainbow
+    cmap = reverse(ColorSchemes.RdYlBu)
     f = Figure(size = (600, 500))
     ax = Axis3(f[1,1:5], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
     hidedecorations!(ax); hidespines!(ax)

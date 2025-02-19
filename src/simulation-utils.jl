@@ -54,8 +54,12 @@ function conc(v, v0, vi)
     end 
 end
 
-function dose(c, t)
-    c * exp(-mod(t, 3))
+function dose(c, t, t0)
+    if t < t0   
+        return 0 
+    else
+        return c * exp(-mod(t, 3))
+    end
 end
 
 function make_scaled_atn_model(ui, part, L)
@@ -92,7 +96,7 @@ function make_scaled_atn_model_hemisphere(ui, part, L)
     return ODEFunction(atn)
 end
 
-function make_scaled_atn_pkpd_model(ui, part, L, Ld, m)
+function make_scaled_atn_pkpd_model(ui, part, L, Ld, m, t0=0)
     function atn_pkpd(D, x, p, t)
         u = @view x[1:36]
         v = @view x[37:72]
@@ -105,7 +109,7 @@ function make_scaled_atn_pkpd_model(ui, part, L, Ld, m)
         D[1:36] .= α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
         D[37:72] .= -ρ_t * L * v .+ α_t .* vi .* v .* (1 .- v)
         D[73:108] .= η .* v .* ( 1 .- a )
-        D[109:end] .= -ρ_d * Ld * d .+ dose(α_c, t) .* m .- λ_d .* d 
+        D[109:end] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
     end
     return ODEFunction(atn_pkpd)
 end
@@ -190,8 +194,8 @@ end
 Solve the ODE given by the `ODEFunction` model, with initial conditons `inits`,
 parameters `params`, over the time span `tspan`
 """
-function simulate(model::ODEFunction, inits, tspan, params; saveat=0.1)
-    return solve(make_prob(model, inits, tspan, params), Tsit5(), saveat=saveat)
+function simulate(model::ODEFunction, inits, tspan, params; saveat=0.1, tol)
+    return solve(make_prob(model, inits, tspan, params), Tsit5(), abstol = tol, reltol=tol, saveat=saveat)
 end
 
 """

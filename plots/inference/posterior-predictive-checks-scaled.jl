@@ -14,6 +14,7 @@ using CSV, DataFrames
 using SciMLBase: successful_retcode
 using DifferentialEquations, Turing, LinearAlgebra
 using Random
+using StatisticalMeasures
 using Serialization
 # --------------------------------------------------------------------------------
 # Load parameters
@@ -122,6 +123,8 @@ pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-ha
 summarize(pst)
 meanpst = mean(pst)
 
+bf_results = CSV.read(projectdir("output/bf-output/bf/averaged_results.csv"), DataFrame)
+
 function get_diff(d)
     d[:,end] .- d[:,1]
 end
@@ -130,68 +133,88 @@ end
 # data_dashboard(tau, v0, vi; show_mtl_threshold=true)
 
 using CairoMakie; CairoMakie.activate!()
-# begin
-#     ab_sols = Vector{Array{Float64}}()
-#     tau_sols = Vector{Array{Float64}}()
-#     atr_sols = Vector{Array{Float64}}()
-#     # pst = deserialize(projectdir("analysis/output/chains/testatnpst-beta-u-conc-normal.jls"));
-#     meanpst = mean(pst)
-#     for sub in 1:22
-#         p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
-#         meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β"), :mean], 
-#         meanpst[Symbol("η[$sub]"), :mean]]
-
-#         pstprob = ODEProblem(fbb_atn_model, fbb_inits[sub], (0.0, 10.0), p)
-#         pstsol = solve(pstprob, Tsit5())
-#         push!(ab_sols,pstsol(fbb_times[sub])[1:72,:])
-#         push!(tau_sols,pstsol(fbb_tau_times[sub])[73:144,:])
-#         push!(atr_sols,pstsol(fbb_tau_times[sub])[145:216,:])
-#     end 
-    
-#     for sub in 1:22
-#     f = Figure(size=(1500, 600))
-
-#     ax1 = CairoMakie.Axis(f[1,1])
-#     CairoMakie.xlims!(ax1, -0.5, 0.5)
-#     CairoMakie.ylims!(ax1, -0.5, 0.5)
-    
-#     ax2 = CairoMakie.Axis(f[1,2])
-#     CairoMakie.xlims!(ax2, -1.0, 1.0)
-#     CairoMakie.ylims!(ax2, -1.0, 1.0)
-
-#     ax3 = CairoMakie.Axis(f[1,3])
-#     CairoMakie.xlims!(ax3, -0., 0.5)
-#     CairoMakie.ylims!(ax3, -0., 0.5)
-
-#     CairoMakie.scatter!(ax1, get_diff(fbb_suvr[sub]), get_diff(ab_sols[sub]))
-#     CairoMakie.scatter!(ax2, get_diff(fbb_tau_suvr[sub]), get_diff(tau_sols[sub]))
-#     CairoMakie.scatter!(ax3, get_diff(fbb_vols[sub]), get_diff(atr_sols[sub]))
-#     display(f)
-#     end
-# end
 
 braak_regions = get_braak_regions()
 bs = [findall(x -> get_node_id(x) ∈ br, cortex) for br in braak_regions]
 
+
 begin
     cmap = Makie.wong_colors();
 
-    f = Figure(size=(1500, 500))
+    f = Figure(size=(1500, 900))
     titlesize = 40
     xlabelsize = 25 
     ylabelsize = 25
-    xticklabelsize = 20 
-    yticklabelsize = 20
+    xticklabelsize = 25 
+    yticklabelsize = 25
+    rsize=30
+
+    start = 0.2
+    stop = 1.0
+    border = 0.03
+    Label(f[0, 1], "Aβ", tellwidth=false, fontsize=35)
+    Label(f[0, 2], "Tau", tellwidth=false, fontsize=35)
+    Label(f[0, 3], "Neurodegeneration", tellwidth=false, fontsize=35)
+    Label(f[1, 0], "ADNI", tellwidth=true, tellheight=false, fontsize=35)
+    Label(f[2, 0], "BF-2", tellwidth=true, tellheight=false, fontsize=35)
+
+    ax1 =CairoMakie.Axis(f[1,1],  
+            xlabel="Observation", 
+            ylabel="Prediction", 
+            titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+            xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+            xticks=start:0.2:stop, yticks=start:0.2:stop, 
+            xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+            xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+    hidexdecorations!(ax1, grid=false, ticks=false, )
+    CairoMakie.xlims!(ax1, start, stop + border)
+    CairoMakie.ylims!(ax1, start, stop + border)
+    lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+    
+    start = -0.0
+    stop = 0.6
+    border = 0.03
+    ax2 =CairoMakie.Axis(f[1,2],  
+            xlabel="Observation", 
+            ylabel="Prediction", 
+            titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+            xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+            xticks=start:0.15:stop, yticks=start:0.15:stop, 
+            xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+            xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+    hideydecorations!(ax2, grid=false, ticks=false, ticklabels=false)
+    hidexdecorations!(ax2, grid=false, ticks=false, )
+    CairoMakie.xlims!(ax2, start, stop + border)
+    CairoMakie.ylims!(ax2, start, stop + border)
+    lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
 
     start = -0.0
     stop = 0.2
     border = 0.01
-    ax4 =CairoMakie.Axis(f[1,1],  
-            xlabel="Δ SUVR", 
-            ylabel="Δ Prediction", 
+    ax3= CairoMakie.Axis(f[1,3],  
+            xlabel="Observation", 
+            ylabel="Prediction", 
             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
             xticks=start:0.05:stop, yticks=start:0.05:stop, 
+            xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+            xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+    hideydecorations!(ax3, grid=false, ticks=false, ticklabels=false)
+    hidexdecorations!(ax3, grid=false, ticks=false, )
+    CairoMakie.xlims!(ax3, start, stop + border)
+    CairoMakie.ylims!(ax3, start, stop + border)
+    lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+    
+    start = 0.2
+    stop = 1.0
+    border = 0.03
+
+    ax4 =CairoMakie.Axis(f[2,1],  
+            xlabel="Observation", 
+            ylabel="Prediction", 
+            titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+            xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+            xticks=start:0.2:stop, yticks=start:0.2:stop, 
             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
 
@@ -200,14 +223,14 @@ begin
     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
     
     start = -0.0
-    stop = 0.2
-    border = 0.01
-    ax5 =CairoMakie.Axis(f[1,2],  
-            xlabel="Δ SUVR", 
-            ylabel="Δ Prediction", 
+    stop = 0.6
+    border = 0.03
+    ax5 =CairoMakie.Axis(f[2,2],  
+            xlabel="Observation", 
+            ylabel="Prediction", 
             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
-            xticks=start:0.05:stop, yticks=start:0.05:stop, 
+            xticks=start:0.2:stop, yticks=start:0.2:stop, 
             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
     hideydecorations!(ax5, grid=false, ticks=false, ticklabels=false)
@@ -218,9 +241,9 @@ begin
     start = -0.0
     stop = 0.2
     border = 0.01
-    ax6= CairoMakie.Axis(f[1,3],  
-            xlabel="Δ Atr.", 
-            ylabel="Δ Prediction", 
+    ax6 = CairoMakie.Axis(f[2,3],  
+            xlabel="Observation", 
+            ylabel="Prediction", 
             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
             xticks=start:0.05:stop, yticks=start:0.05:stop, 
@@ -231,6 +254,7 @@ begin
     CairoMakie.ylims!(ax6, start, stop + border)
     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
     
+
     ab_sols = Vector{Array{Float64}}()
     tau_sols = Vector{Array{Float64}}()
     atr_sols = Vector{Array{Float64}}()
@@ -283,58 +307,422 @@ begin
     # mean_ab_diff = vec(mean(reduce(hcat, get_diff.(fbb_conc)), dims=2)) #; fbp_conc])), dims=2))
     # mean_tau_diff = vec(mean(reduce(hcat, get_diff.(fbb_tau_conc)), dims=2)) #; fbp_tau_conc])), dims=2))
     # mean_atr_diff = vec(mean(reduce(hcat, get_diff.(fbb_vols)), dims=2)) #; fbp_vols])), dims=2))
+    abr = round(rsquared(mean_ab_sols, mean_ab), sigdigits=2)
+    taur = round(rsquared(mean_tau_sols, mean_tau), sigdigits=2)
+    atrr = round(rsquared(mean_atr_sols, mean_atr), sigdigits=2)
 
+    bf_abr = round(rsquared(bf_results.mean_ab_sols, bf_results.mean_ab), sigdigits=2)
+    bf_taur = round(rsquared(bf_results.mean_tau_sols, bf_results.mean_tau), sigdigits=2)
+    bf_atrr = round(rsquared(bf_results.mean_atr_sols, bf_results.mean_atr), sigdigits=2)
+
+    # abr_diff = round(rsquared(mean_ab_sol_diff, mean_ab_diff), sigdigits=2)
+    # taur_diff = round(rsquared(mean_tau_sol_diff, mean_tau_diff), sigdigits=2)
+    # atrr_diff = round(rsquared(mean_atr_sol_diff, mean_atr_diff), sigdigits=2)
     labels = ["Braak 1", "Braak 2/3", "Braak 4", "Braak 5", "Braak 6"]
+    
     for (i, rois) in enumerate(bs)
-        CairoMakie.scatter!(ax4, mean_ab_diff[rois], mean_ab_sol_diff[rois], color=cmap[i], markersize=20 , label=labels[i])
-        CairoMakie.scatter!(ax5, mean_tau_diff[rois], mean_tau_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
-        CairoMakie.scatter!(ax6, mean_atr_diff[rois], mean_atr_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
+        CairoMakie.scatter!(ax1, mean_ab[rois], mean_ab_sols[rois], color=cmap[i], markersize=20 , label=labels[i])
+        CairoMakie.text!(ax1, 1.0, 0., text= L"R^{2} = %$abr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=rsize)
+        CairoMakie.scatter!(ax2, mean_tau[rois], mean_tau_sols[rois], color=cmap[i], markersize=20, label=labels[i])
+        CairoMakie.text!(ax2, 1.0, 0., text= L"R^{2} = %$taur", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=rsize)
+        CairoMakie.scatter!(ax3, mean_atr[rois], mean_atr_sols[rois], color=cmap[i], markersize=20, label=labels[i])
+        CairoMakie.text!(ax3, 1.0, 0., text= L"R^{2} = %$atrr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=rsize)
+
+        CairoMakie.scatter!(ax4, bf_results.mean_ab[rois], bf_results.mean_ab_sols[rois], color=cmap[i], markersize=20 , label=labels[i])
+        CairoMakie.text!(ax4, 1.0, 0., text= L"R^{2} = %$bf_abr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=rsize)
+        CairoMakie.scatter!(ax5, bf_results.mean_tau[rois], bf_results.mean_tau_sols[rois], color=cmap[i], markersize=20, label=labels[i])
+        CairoMakie.text!(ax5, 1.0, 0., text= L"R^{2} = %$bf_taur", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=rsize)
+        CairoMakie.scatter!(ax6, bf_results.mean_atr[rois], bf_results.mean_atr_sols[rois], color=cmap[i], markersize=20, label=labels[i])
+        CairoMakie.text!(ax6, 1.0, 0., text= L"R^{2} = %$bf_atrr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=rsize)
+
+        # CairoMakie.scatter!(ax4, mean_ab_diff[rois], mean_ab_sol_diff[rois], color=cmap[i], markersize=20 , label=labels[i])
+        # CairoMakie.text!(ax4, 1.0, 0., text= L"R^{2} = %$abr_diff", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=25)
+        # CairoMakie.scatter!(ax5, mean_tau_diff[rois], mean_tau_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
+        # CairoMakie.text!(ax5, 1.0, 0., text= L"R^{2} = %$taur_diff", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=25)
+        # CairoMakie.scatter!(ax6, mean_atr_diff[rois], mean_atr_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
+        # CairoMakie.text!(ax6, 1.0, 0., text= L"R^{2} = %$atrr_diff", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=25)
     end
-    Legend(f[2,:], ax6, framevisible = false, unique=true, labelsize=35, nbanks=5, tellheight=true)
+    Legend(f[3,:], ax1, framevisible = false, unique=true, labelsize=35, nbanks=5, tellheight=true, tellwidth=false)
 
     f
 end
-save(projectdir("output/plots/inference-results/pst-pred-harmonised-scaled.pdf"),f)
+save(projectdir("output/plots/inference-results/pst-pred-harmonised-scaled-adni-bf.pdf"),f)
 
-pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-ind-diag-1x1000.jls"));
-summarize(pst)
-meanpst = mean(pst);
+# begin
+#     cmap = Makie.wong_colors();
 
-using CairoMakie; CairoMakie.activate!()
+#     f = Figure(size=(1500, 500))
+#     titlesize = 40
+#     xlabelsize = 25 
+#     ylabelsize = 25
+#     xticklabelsize = 20 
+#     yticklabelsize = 20
 
-mtl_regions = ["entorhinal", "Left-Amygdala", "Right-Amygdala"]
-mtl = findall(x -> x ∈ mtl_regions, get_label.(cortex)) 
-neo_regions = ["inferiortemporal", "middletemporal"] 
-neo = findall(x -> x ∈ neo_regions, get_label.(cortex))
+#     start = -0.0
+#     stop = 0.2
+#     border = 0.01
+#     ax4 =CairoMakie.Axis(f[1,1],  
+#             xlabel="Δ SUVR", 
+#             ylabel="Δ Prediction", 
+#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+#             xticks=start:0.05:stop, yticks=start:0.05:stop, 
+#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
 
-rois = [mtl ; neo]
-ms = [mean(pst["β[$i]"]) for i in 1:44]
-gms = [mean(pst["α_t[$i]"]) for i in 1:44]
+#     CairoMakie.xlims!(ax4, start, stop + border)
+#     CairoMakie.ylims!(ax4, start, stop + border)
+#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+    
+#     start = -0.0
+#     stop = 0.2
+#     border = 0.01
+#     ax5 =CairoMakie.Axis(f[1,2],  
+#             xlabel="Δ SUVR", 
+#             ylabel="Δ Prediction", 
+#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+#             xticks=start:0.05:stop, yticks=start:0.05:stop, 
+#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+#     hideydecorations!(ax5, grid=false, ticks=false, ticklabels=false)
+#     CairoMakie.xlims!(ax5, start, stop + border)
+#     CairoMakie.ylims!(ax5, start, stop + border)
+#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
 
-cs =[cov(vec(pst["β[$i]"]), vec(pst["α_t[$i]"])) for i in 1:44]
-stds = [std(pst["β[$i]"]) for i in 1:44]
-mean_tau_inits = [[mean(fbb_tau_inits[i][rois]) for i in 1:22]; [mean(fbp_tau_inits[i][rois]) for i in 1:22]]
-mean_ab_inits = [[mean(fbb_inits[i][rois]) for i in 1:22]; [mean(fbp_inits[i][rois]) for i in 1:22]]
-total_tau =  [[sum(fbb_tau_inits[i]) for i in 1:22]; [sum(fbp_tau_inits[i]) for i in 1:22]]
-tota_ab = [[sum(fbb_inits[i]) for i in 1:22]; [sum(fbp_inits[i]) for i in 1:22]]
+#     start = -0.0
+#     stop = 0.2
+#     border = 0.01
+#     ax6= CairoMakie.Axis(f[1,3],  
+#             xlabel="Δ Atr.", 
+#             ylabel="Δ Prediction", 
+#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+#             xticks=start:0.05:stop, yticks=start:0.05:stop, 
+#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+#     hideydecorations!(ax6, grid=false, ticks=false, ticklabels=false)
+#     CairoMakie.xlims!(ax6, start, stop + border)
+#     CairoMakie.ylims!(ax6, start, stop + border)
+#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+    
+#     ab_sols = Vector{Array{Float64}}()
+#     tau_sols = Vector{Array{Float64}}()
+#     atr_sols = Vector{Array{Float64}}()
+#     meanpst = mean(pst)
 
-scatter(ms, gms)
-scatter(cs, stds)
-scatter(ms[1:22], cs[1:22])
-scatter(ms[23:44], cs[23:44])
-scatter(ms, stds)
-scatter(ms, mean_tau_inits)
-scatter(ms, mean_ab_inits .* mean_tau_inits)
-scatter(stds, mean_ab_inits .* mean_tau_inits)
-scatter(stds, mean_ab_inits)
-scatter(stds, mean_tau_inits)
+#     for sub in 1:22
+#         p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
+#         meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β"), :mean], 
+#         meanpst[Symbol("η[$sub]"), :mean]]
+        
+#         pstprob = remake(fbb_prob, u0=fbb_inits[sub], p=p)
+#         pstsol = solve(pstprob, Tsit5())
+#         push!(ab_sols,pstsol(fbb_times[sub])[1:72,:])
+#         push!(tau_sols,pstsol(fbb_tau_times[sub])[73:144,:])
+#         push!(atr_sols,pstsol(fbb_tau_times[sub])[145:216,:])
+#     end
 
-using GLMakie; GLMakie.activate!()
-begin
-    f = Figure(size=(500, 600))
-    ax = Axis3(f[1,1], xlabel="ms", ylabel="stds", zlabel="tau inits")
-    # scatter!(ms[1:22], stds[1:22], (mean_tau_inits .* mean_ab_inits)[1:22], markersize=10, color=:blue)
-    # scatter!(ms[23:44], stds[23:44], (mean_tau_inits .* mean_ab_inits)[23:44], markersize=10, color=:red)
-    scatter(ms, gms, cs)
-    f
-end
+#     for (i, sub) in enumerate(23:44)
+#         p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
+#         meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β"), :mean], 
+#         meanpst[Symbol("η[$sub]"), :mean]]
+        
+#         pstprob = remake(fbp_prob, u0=fbp_inits[i], p=p)
+#         pstsol = solve(pstprob, Tsit5())
+#         push!(ab_sols,  pstsol(fbp_times[i])[1:72,:])
+#         push!(tau_sols, pstsol(fbp_tau_times[i])[73:144,:])
+#         push!(atr_sols, pstsol(fbp_tau_times[i])[145:216,:])
+#     end
+
+#     mean_ab_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in ab_sols]), dims=2))
+#     mean_tau_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in tau_sols]), dims=2))
+#     mean_atr_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in atr_sols]), dims=2))
+    
+#     mean_ab =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_conc; fbp_conc]]), dims=2))
+#     mean_tau =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_tau_conc; fbp_tau_conc]]), dims=2))
+#     mean_atr =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_vols; fbp_vols]]), dims=2))
+
+#     # mean_ab =  vec(mean(reduce(hcat, [d[:, end] for d in fbb_conc]), dims=2)) #; fbp_conc]]), dims=2))
+#     # mean_tau =  vec(mean(reduce(hcat, [d[:, end] for d in fbb_tau_conc]), dims=2)) #; fbp_tau_conc]]), dims=2))
+#     # mean_atr =  vec(mean(reduce(hcat, [d[:, end] for d in fbb_vols]), dims=2)) #; fbp_vols]]), dims=2))
+    
+#     mean_ab_sol_diff = vec(mean(reduce(hcat, get_diff.(ab_sols)), dims=2))
+#     mean_tau_sol_diff = vec(mean(reduce(hcat, get_diff.(tau_sols)), dims=2))
+#     mean_atr_sol_diff = vec(mean(reduce(hcat, get_diff.(atr_sols)), dims=2))
+
+#     mean_ab_diff = vec(mean(reduce(hcat, get_diff.([fbb_conc; fbp_conc])), dims=2))
+#     mean_tau_diff = vec(mean(reduce(hcat, get_diff.([fbb_tau_conc; fbp_tau_conc])), dims=2))
+#     mean_atr_diff = vec(mean(reduce(hcat, get_diff.([fbb_vols; fbp_vols])), dims=2))
+
+#     # mean_ab_diff = vec(mean(reduce(hcat, get_diff.(fbb_conc)), dims=2)) #; fbp_conc])), dims=2))
+#     # mean_tau_diff = vec(mean(reduce(hcat, get_diff.(fbb_tau_conc)), dims=2)) #; fbp_tau_conc])), dims=2))
+#     # mean_atr_diff = vec(mean(reduce(hcat, get_diff.(fbb_vols)), dims=2)) #; fbp_vols])), dims=2))
+
+#     labels = ["Braak 1", "Braak 2/3", "Braak 4", "Braak 5", "Braak 6"]
+#     for (i, rois) in enumerate(bs)
+#         CairoMakie.scatter!(ax4, mean_ab_diff[rois], mean_ab_sol_diff[rois], color=cmap[i], markersize=20 , label=labels[i])
+#         CairoMakie.scatter!(ax5, mean_tau_diff[rois], mean_tau_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
+#         CairoMakie.scatter!(ax6, mean_atr_diff[rois], mean_atr_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
+#     end
+#     Legend(f[2,:], ax6, framevisible = false, unique=true, labelsize=35, nbanks=5, tellheight=true)
+
+#     f
+# end
+# save(projectdir("output/plots/inference-results/pst-pred-harmonised-scaled.pdf"),f)
+
+# begin
+#     cmap = Makie.wong_colors();
+
+#     f = Figure(size=(1500, 900))
+#     titlesize = 40
+#     xlabelsize = 25 
+#     ylabelsize = 25
+#     xticklabelsize = 25 
+#     yticklabelsize = 25
+
+#     start = 0.4
+#     stop = 1.0
+#     border = 0.03
+#     Label(f[3, 1], "Aβ", tellwidth=false, fontsize=35)
+#     Label(f[3, 2], "Tau", tellwidth=false, fontsize=35)
+#     Label(f[3, 3], "Neurodegeneration", tellwidth=false, fontsize=35)
+#     ax1 =CairoMakie.Axis(f[1,1],  
+#             xlabel="Observation", 
+#             ylabel="Prediction", 
+#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+#             xticks=start:0.2:stop, yticks=start:0.2:stop, 
+#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+
+#     CairoMakie.xlims!(ax1, start, stop + border)
+#     CairoMakie.ylims!(ax1, start, stop + border)
+#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+    
+#     start = -0.0
+#     stop = 0.6
+#     border = 0.03
+#     ax2 =CairoMakie.Axis(f[1,2],  
+#             xlabel="Observation", 
+#             ylabel="Prediction", 
+#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+#             xticks=start:0.2:stop, yticks=start:0.2:stop, 
+#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+#     hideydecorations!(ax2, grid=false, ticks=false, ticklabels=false)
+#     CairoMakie.xlims!(ax2, start, stop + border)
+#     CairoMakie.ylims!(ax2, start, stop + border)
+#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+
+#     # start = -0.0
+#     # stop = 0.2
+#     # border = 0.01
+#     # ax3= CairoMakie.Axis(f[1,3],  
+#     #         xlabel="Observation", 
+#     #         ylabel="Prediction", 
+#     #         titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+#     #         xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+#     #         xticks=start:0.05:stop, yticks=start:0.05:stop, 
+#     #         xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+#     #         xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+#     # hideydecorations!(ax3, grid=false, ticks=false, ticklabels=false)
+#     # CairoMakie.xlims!(ax3, start, stop + border)
+#     # CairoMakie.ylims!(ax3, start, stop + border)
+#     # lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+
+#     start = -0.0
+#     stop = 0.2
+#     border = 0.01
+#     ax4 =CairoMakie.Axis(f[2,1],  
+#             xlabel="Δ Observation", 
+#             ylabel="Δ Prediction", 
+#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+#             xticks=start:0.05:stop, yticks=start:0.05:stop, 
+#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+
+#     CairoMakie.xlims!(ax4, start, stop + border)
+#     CairoMakie.ylims!(ax4, start, stop + border)
+#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+    
+#     start = -0.0
+#     stop = 0.2
+#     border = 0.01
+#     ax5 =CairoMakie.Axis(f[2,2],  
+#             xlabel="Δ Observation", 
+#             ylabel="Δ Prediction", 
+#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+#             xticks=start:0.05:stop, yticks=start:0.05:stop, 
+#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+#     hideydecorations!(ax5, grid=false, ticks=false, ticklabels=false)
+#     CairoMakie.xlims!(ax5, start, stop + border)
+#     CairoMakie.ylims!(ax5, start, stop + border)
+#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+
+#     start = -0.0
+#     stop = 0.2
+#     border = 0.01
+#     ax6= CairoMakie.Axis(f[2,3],  
+#             xlabel="Δ Observation.", 
+#             ylabel="Δ Prediction", 
+#             titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
+#             xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
+#             xticks=start:0.05:stop, yticks=start:0.05:stop, 
+#             xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
+#             xtickformat = "{:.2f}", ytickformat = "{:.2f}")
+#     hideydecorations!(ax6, grid=false, ticks=false, ticklabels=false)
+#     CairoMakie.xlims!(ax6, start, stop + border)
+#     CairoMakie.ylims!(ax6, start, stop + border)
+#     lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
+    
+#     ab_sols = Vector{Array{Float64}}()
+#     tau_sols = Vector{Array{Float64}}()
+#     atr_sols = Vector{Array{Float64}}()
+#     meanpst = mean(pst)
+
+#     for sub in 1:22
+#         p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
+#         meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β"), :mean], 
+#         meanpst[Symbol("η[$sub]"), :mean]]
+        
+#         pstprob = remake(fbb_prob, u0=fbb_inits[sub], p=p)
+#         pstsol = solve(pstprob, Tsit5())
+#         push!(ab_sols,pstsol(fbb_times[sub])[1:72,:])
+#         push!(tau_sols,pstsol(fbb_tau_times[sub])[73:144,:])
+#         push!(atr_sols,pstsol(fbb_tau_times[sub])[145:216,:])
+#     end
+
+#     for (i, sub) in enumerate(23:44)
+#         p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
+#         meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β"), :mean], 
+#         meanpst[Symbol("η[$sub]"), :mean]]
+        
+#         pstprob = remake(fbp_prob, u0=fbp_inits[i], p=p)
+#         pstsol = solve(pstprob, Tsit5())
+#         push!(ab_sols,  pstsol(fbp_times[i])[1:72,:])
+#         push!(tau_sols, pstsol(fbp_tau_times[i])[73:144,:])
+#         push!(atr_sols, pstsol(fbp_tau_times[i])[145:216,:])
+#     end
+
+#     mean_ab_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in ab_sols]), dims=2))
+#     mean_tau_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in tau_sols]), dims=2))
+#     mean_atr_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in atr_sols]), dims=2))
+    
+#     mean_ab =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_conc; fbp_conc]]), dims=2))
+#     mean_tau =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_tau_conc; fbp_tau_conc]]), dims=2))
+#     mean_atr =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_vols; fbp_vols]]), dims=2))
+
+#     # mean_ab =  vec(mean(reduce(hcat, [d[:, end] for d in fbb_conc]), dims=2)) #; fbp_conc]]), dims=2))
+#     # mean_tau =  vec(mean(reduce(hcat, [d[:, end] for d in fbb_tau_conc]), dims=2)) #; fbp_tau_conc]]), dims=2))
+#     # mean_atr =  vec(mean(reduce(hcat, [d[:, end] for d in fbb_vols]), dims=2)) #; fbp_vols]]), dims=2))
+    
+#     mean_ab_sol_diff = vec(mean(reduce(hcat, get_diff.(ab_sols)), dims=2))
+#     mean_tau_sol_diff = vec(mean(reduce(hcat, get_diff.(tau_sols)), dims=2))
+#     mean_atr_sol_diff = vec(mean(reduce(hcat, get_diff.(atr_sols)), dims=2))
+
+#     mean_ab_diff = vec(mean(reduce(hcat, get_diff.([fbb_conc; fbp_conc])), dims=2))
+#     mean_tau_diff = vec(mean(reduce(hcat, get_diff.([fbb_tau_conc; fbp_tau_conc])), dims=2))
+#     mean_atr_diff = vec(mean(reduce(hcat, get_diff.([fbb_vols; fbp_vols])), dims=2))
+
+#     # mean_ab_diff = vec(mean(reduce(hcat, get_diff.(fbb_conc)), dims=2)) #; fbp_conc])), dims=2))
+#     # mean_tau_diff = vec(mean(reduce(hcat, get_diff.(fbb_tau_conc)), dims=2)) #; fbp_tau_conc])), dims=2))
+#     # mean_atr_diff = vec(mean(reduce(hcat, get_diff.(fbb_vols)), dims=2)) #; fbp_vols])), dims=2))
+#     abr = round(rsquared(mean_ab_sols, mean_ab), sigdigits=2)
+#     taur = round(rsquared(mean_tau_sols, mean_tau), sigdigits=2)
+#     atrr = round(rsquared(mean_atr_sols, mean_atr), sigdigits=2)
+
+#     abr_diff = round(rsquared(mean_ab_sol_diff, mean_ab_diff), sigdigits=2)
+#     taur_diff = round(rsquared(mean_tau_sol_diff, mean_tau_diff), sigdigits=2)
+#     atrr_diff = round(rsquared(mean_atr_sol_diff, mean_atr_diff), sigdigits=2)
+#     labels = ["Braak 1", "Braak 2/3", "Braak 4", "Braak 5", "Braak 6"]
+    
+#     for (i, rois) in enumerate(bs)
+#         CairoMakie.scatter!(ax1, mean_ab[rois], mean_ab_sols[rois], color=cmap[i], markersize=20 , label=labels[i])
+#         CairoMakie.text!(ax1, 1.0, 0., text= L"R^{2} = %$abr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=25)
+#         CairoMakie.scatter!(ax2, mean_tau[rois], mean_tau_sols[rois], color=cmap[i], markersize=20, label=labels[i])
+#         CairoMakie.text!(ax2, 1.0, 0., text= L"R^{2} = %$taur", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=25)
+#         # CairoMakie.scatter!(ax3, mean_atr[rois], mean_atr_sols[rois], color=cmap[i], markersize=20, label=labels[i])
+#         # CairoMakie.text!(ax3, 1.0, 0., text= L"R^{2} = %$atrr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=25)
+
+#         CairoMakie.scatter!(ax4, mean_ab_diff[rois], mean_ab_sol_diff[rois], color=cmap[i], markersize=20 , label=labels[i])
+#         CairoMakie.text!(ax4, 1.0, 0., text= L"R^{2} = %$abr_diff", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=25)
+#         CairoMakie.scatter!(ax5, mean_tau_diff[rois], mean_tau_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
+#         CairoMakie.text!(ax5, 1.0, 0., text= L"R^{2} = %$taur_diff", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=25)
+#         CairoMakie.scatter!(ax6, mean_atr_diff[rois], mean_atr_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
+#         CairoMakie.text!(ax6, 1.0, 0., text= L"R^{2} = %$atrr_diff", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=25)
+#     end
+#     Legend(f[1,3], ax5, framevisible = false, unique=true, labelsize=35, nbanks=2, tellheight=false, tellwidth=false)
+
+#     f
+# end
+# save(projectdir("output/plots/inference-results/pst-pred-harmonised-scaled-all.pdf"),f)
+
+# pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-ind-diag-1x1000.jls"));
+# summarize(pst)
+# meanpst = mean(pst);
+
+# using CairoMakie; CairoMakie.activate!()
+
+# mtl_regions = ["entorhinal", "Left-Amygdala", "Right-Amygdala"]
+# mtl = findall(x -> x ∈ mtl_regions, get_label.(cortex)) 
+# neo_regions = ["inferiortemporal", "middletemporal"] 
+# neo = findall(x -> x ∈ neo_regions, get_label.(cortex))
+
+# rois = [mtl ; neo]
+# ms = [mean(pst["β[$i]"]) for i in 1:44]
+# gms = [mean(pst["α_t[$i]"]) for i in 1:44]
+
+# cs =[cov(vec(pst["β[$i]"]), vec(pst["α_t[$i]"])) for i in 1:44]
+# stds = [std(pst["β[$i]"]) for i in 1:44]
+# mean_tau_inits = [[mean(fbb_tau_inits[i][rois]) for i in 1:22]; [mean(fbp_tau_inits[i][rois]) for i in 1:22]]
+# mean_ab_inits = [[mean(fbb_inits[i][rois]) for i in 1:22]; [mean(fbp_inits[i][rois]) for i in 1:22]]
+# total_tau =  [[sum(fbb_tau_inits[i]) for i in 1:22]; [sum(fbp_tau_inits[i]) for i in 1:22]]
+# tota_ab = [[sum(fbb_inits[i]) for i in 1:22]; [sum(fbp_inits[i]) for i in 1:22]]
+
+# scatter(ms, gms)
+# scatter(cs, stds)
+# scatter(ms[1:22], cs[1:22])
+# scatter(ms[23:44], cs[23:44])
+# scatter(ms, stds)
+# scatter(ms, mean_tau_inits)
+# scatter(ms, mean_ab_inits .* mean_tau_inits)
+# scatter(stds, mean_ab_inits .* mean_tau_inits)
+# scatter(stds, mean_ab_inits)
+# scatter(stds, mean_tau_inits)
+
+# using GLMakie; GLMakie.activate!()
+# begin
+#     f = Figure(size=(500, 600))
+#     ax = Axis3(f[1,1], xlabel="ms", ylabel="stds", zlabel="tau inits")
+#     # scatter!(ms[1:22], stds[1:22], (mean_tau_inits .* mean_ab_inits)[1:22], markersize=10, color=:blue)
+#     # scatter!(ms[23:44], stds[23:44], (mean_tau_inits .* mean_ab_inits)[23:44], markersize=10, color=:red)
+#     scatter(ms, gms, cs)
+#     f
+# end
+
+# fmm_u0, fmm_ui = load_ab_params(tracer="FMM")
+# bf_v0, bf_vi, bf_part = load_tau_params(tracer="RO")
+# using CairoMakie
+# begin
+#     f = Figure(size=(600, 500))
+#     ax = Axis(f[1,1], xlabel="Amyloid", ylabel="Tau")
+#     CairoMakie.ylims!(ax, 0.0, 5.0)
+#     CairoMakie.xlims!(ax, 0.0, 5.0)
+#     CairoMakie.scatter!(part .+ 4.5 .* (fbb_ui .- fbb_u0), vi .+ v0)    
+#     lines!(collect(0:0.1:5), collect(0:0.1:5), linestyle=:dash)
+#     f
+# end
+
+# begin
+#         f = Figure(size=(600, 500))
+#         ax = Axis(f[1,1], xlabel="Amyloid", ylabel="Tau")
+#         CairoMakie.ylims!(ax, 0.0, 8.0)
+#         CairoMakie.xlims!(ax, 0.0, 8.0)
+#         CairoMakie.scatter!(bf_part .+ 6. .* (fmm_ui .- fmm_u0), bf_vi .+ bf_v0)    
+#         f
+# end
