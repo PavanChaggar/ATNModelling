@@ -103,7 +103,7 @@ normalise!(fbp_suvr, fbp_u0, fbp_ui)
 fbp_inits = [d[:,1] for d in fbp_suvr]
 
 fbp_tau_suvr = calc_suvr.(fbp_tau)
-normalise!(fbp_tau_suvr, v0)
+normalise!(fbp_tau_suvr, v0, vi)
 fbp_tau_inits = [d[:,1] for d in fbp_tau_suvr]
 
 fbp_tau_pos_vol = get_vol.(fbp_tau)
