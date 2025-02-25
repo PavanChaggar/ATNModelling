@@ -37,7 +37,7 @@ fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.AMYLOID_STATUS
 fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COMPOSITE_REF")
 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
-tau_pos_df = filter(x ->  x.MTL_Status == 0 && x.NEO_Status == 0, tau_data_df);
+tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 0, tau_data_df);
 tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
 
 pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-1x1000.jls"));
@@ -78,7 +78,7 @@ tau_conc = map(x -> conc.(x, v0, vi), tau_suvr)
 tau_inits = [d[:,1] for d in tau_conc]
 
 mean_tau_init = mean(tau_inits)
-filtered_tau_idx = findall(x -> x < 0.05, mean_tau_init)
+filtered_tau_idx = findall(x -> x < 0.025, mean_tau_init)
 mean_tau_init[filtered_tau_idx] .= 0
 
 begin
@@ -188,8 +188,8 @@ save(projectdir("output/plots/colocalisation/ab_tau_progression.pdf"), f)
 # --------------------------------------------------------------------------------
 # Colocalisation
 # --------------------------------------------------------------------------------
-right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/colocalisation-order-right.csv"), DataFrame)
-left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/colocalisation-order-left.csv"), DataFrame)
+right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-right.csv"), DataFrame)
+left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-left.csv"), DataFrame)
 
 begin
     GLMakie.activate!()
@@ -219,12 +219,12 @@ begin
     Colorbar(f[3, 2:9], colormap=reverse(cmap), limits=(1,36), 
              ticks=([1, 36], ["First", "Last"]), ticklabelsize=20, ticksize=10, labelpadding=-20,
              label="Order of colocalisation", vertical = false, flipaxis = false, labelsize=25)
-    # f
+    f
 end
-save(projectdir("output/plots/colocalisation/colocalisation-order.jpeg"), f)
+save(projectdir("output/plots/colocalisation/colocalisation-order-0109.jpeg"), f)
 
-right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/colocalisation-prob-right.csv"), DataFrame)
-left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/colocalisation-prob-left.csv"), DataFrame)
+right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-right.csv"), DataFrame)
+left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-left.csv"), DataFrame)
 begin
     GLMakie.activate!()
     cmap = ColorSchemes.viridis
@@ -252,42 +252,183 @@ begin
               label="Probability of colocalisation", labelsize=25, labelpadding=-20)
     
 end
-save(projectdir("output/plots/colocalisation/colocalisation-prob.jpeg"), f)
+save(projectdir("output/plots/colocalisation/colocalisation-prob-0109.jpeg"), f)
 
+begin
+    GLMakie.activate!()
+    f = Figure(size = (1000, 1100))
 
-using DifferentialEquations
+    g1 = f[1,1:2] = GridLayout()
+    g2 = f[2,1:2] = GridLayout()
+    g3 = f[3,1] = GridLayout()
+    g4 = f[3,2] = GridLayout()
+    cmap = ColorSchemes.viridis
 
-inits = rand(72)
+    # Initial conditions 
+    ab_val = mean_ab_init[1:36]
+    ax = Axis3(g1[2,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(get_node_id.(right_cortex), max_norm(ab_val) , cmap)
+    # ax.alignmode = Mixed(top = 20)
 
-function weighted_diffusion(du, u, p, t; L = L )
-    for i in 1:72
-        du[i] = -p[1] * (1 / vi[i]) * sum(L[i,:] .* vi .* u)
+    ax = Axis3(g1[2,4], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(get_node_id.(right_cortex), max_norm(ab_val), cmap)
+    # ax.alignmode = Mixed(top = 20)
+
+    tau_val = mean_tau_init[1:36]
+    ax = Axis3(g1[2,5], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(get_node_id.(right_cortex), tau_val ./ maximum(ab_val) , cmap)
+    # ax.alignmode = Mixed(top = 20)
+    ax = Axis3(g1[2,6], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(get_node_id.(right_cortex), tau_val ./ maximum(ab_val), cmap)
+    cb = Colorbar(g1[2, 2], colormap=cmap, limits=(0,0.6), ticks=0:0.2:0.6,
+             ticklabelsize=25, vertical = true, flipaxis = false, labelsize=25)
+    cb.alignmode = Mixed(left = 0, top = 40, bottom = 40)
+    ax.alignmode = Mixed(top = 20)
+    Label(g1[2, 1], "Concentration", fontsize=25, rotation=pi/2, tellheight=false, padding = (0, 0, 0, 20))
+    Label(g1[1, 3:4], "Aβ", fontsize=25, tellwidth=false, tellheight=true, padding = (0, 0, -50, 0))
+    Label(g1[1, 5:6], "Tau", fontsize=25, tellwidth=false, tellheight=true, padding = (0, 0, -50, 0))
+
+    # la.alignmode = Mixed(top = 30)
+
+    # tau progression 
+    ax = Axis(g2[1,2], xlabel="t / years", ylabel="Concentration", title="Aβ Progression",titlefont=:regular, 
+    yticks=0:0.2:1.0, xticks=0:20:150, ylabelsize=25, xlabelsize=25, xticklabelsize=25, yticklabelsize=25, titlesize=25)
+    hideydecorations!(ax, grid=false, ticks=false, ticklabels=false)
+    xlims!(ax, 0.0, 80)
+    ylims!(ax, 0.0, 1.05)
+    hlines!(ax, 0.9, color=:grey, linestyle=:dash, linewidth=3)
+    for i in 1:36
+        lines!(sol.t, Array(sol)[i, :], color=(:grey, 0.5), linewidth=2)
     end
-end
-
-function diffusion(du, u, p, t; L = L )
-    for i in 1:72
-        du[i] = -p[1] * sum(L[:,i] .* u)
+    lines!(sol.t, Array(sol)[29, :], color=(:red, 0.75), linewidth=3)
+    lines!(sol.t, Array(sol)[27, :], color=(:blue, 0.75), linewidth=3)
+    ax.alignmode = Mixed(right = 0, left = 0 )
+    
+    ax = Axis(g2[1,3], xlabel="t / years", ylabel="", title="Tau Progression", titlefont=:regular, 
+    yticks=0:0.2:1.0, xticks=0:20:150, ylabelsize=25, xlabelsize=25, xticklabelsize=25, yticklabelsize=25, titlesize=25)
+    hideydecorations!(ax, grid=false, ticks=false, ticklabels=false)
+    xlims!(ax, 0.0, 80)
+    ylims!(ax, 0.0, 1.05)
+    hlines!(ax, 0.1, color=:grey, linestyle=:dash, linewidth=3)
+    for i in 1:36
+        lines!(sol.t, Array(sol)[36 + i, :], color=(:grey, 0.5), linewidth=2)
     end
+    lines!(sol.t, Array(sol)[36 + 29, :], color=(:red, 0.75), linewidth=3)
+    lines!(sol.t, Array(sol)[36 + 27, :], color=(:blue, 0.75), linewidth=3)
+    ax.alignmode = Mixed(right = 0 , left = 0)
+    Label(g2[1, 1], "Concentration", fontsize=25, rotation=pi/2, tellheight=false)
+
+    # coloc order 
+    right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-right.csv"), DataFrame)
+    left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-left.csv"), DataFrame)
+    # df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-all.csv"), DataFrame)
+    # left_df = filter(x -> x.Hemisphere == "left", df)
+    # right_df = filter(x -> x.Hemisphere == "right", df)
+
+    left_df
+    cmap = reverse(ColorSchemes.RdYlBu)
+    ax = Axis3(g3[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(left_df.DKTID, 
+            reverse(collect(range(0, 1, 36))), cmap)
+    ax = Axis3(g3[2,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,   protrusions=(0.0,0.0,0.0,0.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(left_df.DKTID, 
+            reverse(collect(range(0, 1, 36))), cmap)
+    plot_roi!(get_node_id.(left_subcortex), ones(5) .* 0.75, ColorSchemes.Greys)
+
+    ax = Axis3(g3[1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,   protrusions=(0.0,0.0,0.0,0.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(right_df.DKTID, 
+                reverse(collect(range(0, 1, 36))), cmap)
+
+    ax = Axis3(g3[2,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,   protrusions=(0.0,0.0,0.0,0.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(right_df.DKTID, 
+                reverse(collect(range(0, 1, 36))), cmap)
+    plot_roi!(get_node_id.(right_subcortex), ones(5) .* 0.75, ColorSchemes.Greys)
+    cb = Colorbar(g3[3, :], colormap=reverse(cmap), limits=(1,36), 
+             ticks=([1, 36], ["First", "Last"]), ticklabelsize=25, ticksize=10, labelpadding=-20,
+             label="Order \n of colocalisation", vertical = false, flipaxis = false, labelsize=25)
+    cb.alignmode = Mixed(left = 50, right = 50 )
+
+    # coloc prob 
+    right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-right.csv"), DataFrame)
+    left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-left.csv"), DataFrame)
+    # df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-all.csv"), DataFrame)
+    # left_df = filter(x -> x.Hemisphere == "left", df)
+    # right_df = filter(x -> x.Hemisphere == "right", df)
+    cmap = ColorSchemes.viridis
+    ax = Axis3(g4[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(left_df.DKTID, left_df.Seed_prob ./ maximum(df.Seed_prob), cmap)
+    
+    ax = Axis3(g4[2,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(left_df.DKTID, left_df.Seed_prob ./ maximum(df.Seed_prob), cmap)
+    plot_roi!(get_node_id.(left_subcortex), ones(5) .* 0.75, ColorSchemes.Greys)
+
+    ax = Axis3(g4[1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(right_df.DKTID, right_df.Seed_prob ./ maximum(df.Seed_prob), cmap)
+    
+    ax = Axis3(g4[2,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
+    hidedecorations!(ax); hidespines!(ax)
+    plot_roi!(right_df.DKTID, right_df.Seed_prob ./ maximum(df.Seed_prob), cmap)
+    plot_roi!(get_node_id.(right_subcortex), ones(5) .* 0.75, ColorSchemes.Greys)
+
+    cb = Colorbar(g4[3, :], colormap=cmap, limits=(0, 0.4), ticks=[0,0.4],
+              ticklabelsize=25, ticksize=10, vertical = false, flipaxis = false, tellwidth=false,
+              label="Probability \n of colocalisation", labelsize=25, labelpadding=-20)
+    cb.alignmode = Mixed(left = 50, right = 50 )
+
+    # rowgap!(f.layout, 0, 50)
+    rowgap!(f.layout, 1, 20)
+    rowgap!(f.layout, 2, 20)
+    colgap!(g3, 1, -15)
+    colgap!(g4, 1, -15)
+    rowsize!(f.layout, 1, 200)
+    rowsize!(f.layout, 2, 250)
+
+
+    Label(g1[1, 1, TopLeft()], "A", fontsize = 26, font = :bold, padding = (0, 0, -30, 0), halign = :left, tellheight=false, tellwidth=false)
+    Label(g2[1, 1, TopLeft()], "B", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
+    Label(g3[1, 1, TopLeft()], "C", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
+    Label(g4[1, 1, TopLeft()], "D", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
+    
+    f
 end
+save(projectdir("output/plots/colocalisation/colocalisation.jpeg"), f)
 
-function diffusion(du, u, p, t; L = L2)
-    du .= -p[1] * L * u
-end
-L2 = inv(diagm(vi)) * L * diagm(vi)
+# late tables 
+using PrettyTables, CSV, DataFrames, DrWatson
+left_df = filter( x -> x.Seed_prob > 0.0, CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-left.csv"), DataFrame))
+right_df = filter( x -> x.Seed_prob > 0.0, CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-right.csv"), DataFrame))
 
-function fkpp(du, u, p, t; L = L2)
-    du .= -p[1] * L * u .+ p[2] .* vi .* u .* ( 1 .- u)
-end
+df = DataFrame(
+          Right_Seed = [reverse(right_df.Seed); ""],
+          Right_prob = [reverse(right_df.Seed_prob); 0],
+          Left_seed = reverse(left_df.Seed),
+          left_prob = reverse(left_df.Seed_prob)
+          )
+formatter = (v, i, j) -> round(v, digits = 3);
 
-e = eigen(Array(L2))
-using Connectomes: plot_roi
-plot_roi(get_node_id.(cortex), max_norm(abs.(e.vectors[:,1])), ColorSchemes.viridis)
+pretty_table(df; formatters = ft_printf("%5.3f"), backend=Val(:latex))
 
-inits = zeros(72)
-inits[[27, 63]] .= 0.1
-sol = solve(ODEProblem(fkpp, inits, (0.0,15.0), [0.1, 0.5]), Tsit5())
-f = Plots.plot(sol, labels=false)
+using PrettyTables, CSV, DataFrames, DrWatson
+left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-left.csv"), DataFrame)
+right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-right.csv"), DataFrame)
 
-f
-Plots.scatter(sol[end])
+df = DataFrame(
+          Right_Seed = right_df.Region ,
+          Right_prob = right_df.Coloc_time,
+          Left_seed = left_df.Region,
+          left_prob = left_df.Coloc_time
+          )
+formatter = (v, i, j) -> round(v, digits = 3);
+
+pretty_table(df; formatters = ft_printf("%5.3f"), backend=Val(:latex))

@@ -194,7 +194,7 @@ end
 Solve the ODE given by the `ODEFunction` model, with initial conditons `inits`,
 parameters `params`, over the time span `tspan`
 """
-function simulate(model::ODEFunction, inits, tspan, params; saveat=0.1, tol)
+function simulate(model::ODEFunction, inits, tspan, params; saveat=0.1, tol=1e-6)
     return solve(make_prob(model, inits, tspan, params), Tsit5(), abstol = tol, reltol=tol, saveat=saveat)
 end
 
@@ -382,11 +382,11 @@ function find_seed(parc, sols, tau_cutoff, ab_cutoff)
 end
 
 
-function calculate_colocalisation_prob(parc, pst, model, inits)
+function calculate_colocalisation_prob(parc, pst, model, inits, tau_prob, ab_prob)
     sols = [simulate(model, inits, (0, 200), params, saveat=0.1) 
                     for params in zip( vec(pst[:Am_a]), vec(pst[:Pm_t]), vec(pst[:Am_t]), vec(pst[:β]), vec(pst[:Em]))];
 
-    seed_idx = reduce(vcat, find_seed(parc, sols, 0.1, 0.9))
+    seed_idx = reduce(vcat, find_seed(parc, sols, tau_prob, ab_prob))
 
     nodes = length(parc)
     seed_count = zeros(nodes)
