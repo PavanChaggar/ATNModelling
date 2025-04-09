@@ -16,6 +16,8 @@ using DifferentialEquations, Turing, LinearAlgebra
 using Random
 using StatisticalMeasures
 using Serialization
+using CairoMakie; CairoMakie.activate!()
+using Colors, ColorSchemes
 # --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
@@ -215,13 +217,11 @@ _rois = ["entorhinal", "Left-Hippocampus", "Right-Hippocampus", "Left-Amygdala",
 rois = findall(x -> x ∈ _rois, get_label.(cortex))
 
 pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-1x1000.jls"));
-bf_pst = deserialize(projectdir("output/bf-output/bf/pst-samples-scaled2-1x1000.jls"));
+bf_pst = deserialize(projectdir("output/bf-output/bf/pst-samples-scaled-fixed-1x1000.jls"));
 braak_regions = get_braak_regions()
 bs = [findall(x -> get_node_id(x) ∈ br, cortex) for br in braak_regions]
 
 begin
-        using CairoMakie; CairoMakie.activate!()
-        using Colors, ColorSchemes
         cmap = Makie.wong_colors();
         ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
         tau_c = sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5);
@@ -302,7 +302,7 @@ begin
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
         xlims!(ax, 3,8.5)
-        hist!(vec(Array(bf_pst[:β])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        # hist!(vec(Array(bf_pst[:β])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
     
         ax = Axis(g1[2,5], xticks=0.0:0.05:0.1, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
         hidespines!(ax, :l, :t, :r)
