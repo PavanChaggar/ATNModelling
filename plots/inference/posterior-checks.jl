@@ -154,7 +154,7 @@ begin
 
     using CairoMakie; CairoMakie.activate!()
     pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-1x1000.jls"));
-    bf_pst = deserialize(projectdir("output/bf-output/bf/pst-samples-scaled2-1x1000.jls"));
+    bf_pst = deserialize(projectdir("output/bf-output/bf/pst-samples-scaled-fixed-1x1000.jls"));
 
     colors = Makie.wong_colors();
     titlesize=25
@@ -179,7 +179,7 @@ begin
     ax = Axis(g[3][1,1],  xticks=0:0.05:0.1,  xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title=L"\gamma \text{: tau production}", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
     hidespines!(ax, :l, :t, :r)
     hideydecorations!(ax, label=false)
-    xlims!(ax, 0.0,0.125)
+    xlims!(ax, 0.0,0.225)
     hist!(vec(Array(pst[:Am_t])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
     hidexdecorations!(ax, grid=false, ticks=false)
 
@@ -216,15 +216,15 @@ begin
     ax = Axis(g2[3][1,1],  xticks=0:0.05:0.1,  xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
     hidespines!(ax, :l, :t, :r)
     hideydecorations!(ax, label=false)
-    xlims!(ax, 0.0,0.125)
+    xlims!(ax, 0.0,0.225)
     hist!(vec(Array(bf_pst[:Am_t])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
     
 
-    ax = Axis(g2[4][1,1], xticks=3:1:8.5, titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
-    hidespines!(ax, :l, :t, :r)
-    hideydecorations!(ax, label=false)
-    xlims!(ax, 3,8.5)
-    hist!(vec(Array(bf_pst[:β])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+    # ax = Axis(g2[4][1,1], xticks=3:1:8.5, titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+    # hidespines!(ax, :l, :t, :r)
+    # hideydecorations!(ax, label=false)
+    # xlims!(ax, 3,8.5)
+    # hist!(vec(Array(bf_pst[:β])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
 
     ax = Axis(g2[5][1,1], xticks=0.0:0.05:0.1,  xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
     hidespines!(ax, :l, :t, :r)

@@ -2,11 +2,15 @@ using ATNModelling.SimulationUtils: make_scaled_atn_pkpd_model,
                                     simulate, load_ab_params, load_tau_params, conc
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names, 
                                     get_distance_laplacian
+using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
 
 using Connectomes: laplacian_matrix, get_label, get_hemisphere, get_node_id, plot_roi!
 using DifferentialEquations
 using CairoMakie, ColorSchemes, Colors
 using DrWatson
+using CSV, DataFrames
+using ADNIDatasets
+using Statistics
 # --------------------------------------------------------------------------------
 # Tracer independent data
 # --------------------------------------------------------------------------------
@@ -21,10 +25,45 @@ dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 Lh = L[1:36, 1:36]
 Ld = get_distance_laplacian()
 
-cingulate = findall(x -> contains(get_label(x), "cingulate"), cortex)
-m = zeros(36)
-m[cingulate] .= 1
-m[[35,36]] .= 1
+# --------------------------------------------------------------------------------
+# Load data
+# --------------------------------------------------------------------------------
+_ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
+_tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
+
+tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
+tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 0, tau_data_df);
+tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
+IDS = unique(tau_pos_df.RID)
+
+tracer="FBB"
+
+fbb_u0, fbb_ui = load_ab_params(tracer=tracer)
+fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.RID ∈ IDS, _ab_data_df)
+fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COMPOSITE_REF")
+
+fbb_suvr = calc_suvr.(fbb_data)
+normalise!(fbb_suvr, fbb_u0, fbb_ui)
+fbb_conc = map(x -> conc.(x, fbb_u0, fbb_ui), fbb_suvr)
+fbb_inits = [d[:,1] for d in fbb_conc]
+mean_fbb_init = mean(fbb_inits)[1:36]
+println("ab concentration = $(mean_fbb_init[29])")
+
+fbb_tau_suvr = calc_suvr.(tau_data)
+normalise!(fbb_tau_suvr, v0, vi)
+fbb_tau_conc = map(x -> conc.(x, v0, vi), fbb_tau_suvr)
+fbb_tau_inits = [d[:,1] for d in fbb_tau_conc]
+mean_tau_init = mean(fbb_tau_inits)[1:36]
+mean_tau_init[findall(x -> x < 0.05, mean_tau_init)] .= 0
+println("tau concentration = $(mean_tau_init[29])")
+scatter(mean_tau_init)
+
+# vol_init = zeros(36)
+
+# cingulate = findall(x -> contains(get_label(x), "cingulate"), cortex)
+# m = zeros(36)
+# m[cingulate] .= 1
+# m[[35,36]] .= 1
 
 amyloid_production = 0.35 / 12
 tau_transport = 0.06 / 12
@@ -46,44 +85,44 @@ drug_clearance = 0.5 / 12
 # drug_effect = 0.0
 # drug_clearance = 0.1
 
-tau_init = zeros(36)
-tau_init[27] = 0.2
-atn_pkpd = make_scaled_atn_pkpd_model(ui[1:36] .- u0[1:36], part[1:36], Lh, Ld, m, 0)
+# tau_init = zeros(36)
+# tau_init[27] = 0.2
+# atn_pkpd = make_scaled_atn_pkpd_model(ui[1:36] .- u0[1:36], part[1:36], Lh, Ld, m, 0)
 
 ts = range(0,  300, 600)
-
-sol = simulate(atn_pkpd, [zeros(36) .+ 0.5; tau_init; zeros(72)], 
+ts = range(0, 180, 480)
+sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
                 (0.0,  300.0), [amyloid_production, tau_transport, tau_production, 
                                         coupling, atrophy, 
                                         drug_transport, drug_effect, 
                                         drug_concentration, drug_clearance]; 
                                         saveat=ts, tol=1e-9)
 
-solts = simulate(atn_pkpd, [zeros(36) .+ 0.5; tau_init; zeros(72)], 
+solts = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
                 (0.0, 300.0), [amyloid_production, tau_transport, tau_production, 
                         coupling, atrophy, 
                         drug_transport, drug_effect, 
                         drug_concentration, drug_clearance]; 
                         saveat=ts)
 
-placebo_sol = simulate(atn_pkpd, [zeros(36) .+ 0.5; tau_init; zeros(72)], 
+placebo_sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
                 (0.0, 300.0), [amyloid_production, tau_transport, tau_production, 
                                         coupling, atrophy, 
                                         drug_transport, 0.0, 
                                         drug_concentration, drug_clearance]; 
                                         saveat=ts)
 
-placebo_solts = simulate(atn_pkpd, [zeros(36) .+ 0.25; tau_init; zeros(72)], 
+placebo_solts = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
                 (0.0, 300.0), [amyloid_production, tau_transport, tau_production, 
                         coupling, atrophy, 
                         drug_transport, 0.0, 
                         drug_concentration, drug_clearance]; 
                         saveat=ts)
 
-absol = Array(sol[1:36,:])
-tausol = Array(sol[37:72,:])
-atrsol = Array(sol[73:108,:])
-drugsol = Array(sol[109:end,:]) 
+absol = Array(placebo_sol[1:36,:])
+tausol = Array(placebo_sol[37:72,:])
+atrsol = Array(placebo_sol[73:108,:])
+drugsol = Array(placebo_sol[109:end,:]) 
 
 begin
     CairoMakie.activate!()
@@ -108,35 +147,43 @@ begin
     f
 end
 
+using GLMakie
+
 begin 
     GLMakie.activate!()
     nodes = get_node_id.(cortex)
     cmap = ColorSchemes.viridis
     lcmap = Makie.wong_colors()
-    f = Figure(size=(1400, 300), fontsize=20)
+    f = Figure(size=(1400, 500), fontsize=20)
 
     g1 = f[1, 1] = GridLayout()
     g2 = f[1, 2] = GridLayout()
 
     ax1 = Axis(g1[1,1], ylabel="Drug Conc.", ytickformat="{:.1f}", xlabel="Time / Months", yticklabelsize=25,
     xticklabelsize=25)
-    xlims!(ax1, 0, 60)
-    ylims!(ax1, 0, 1)
+    xlims!(ax1, 0, 120)
+    # ylims!(ax1, 0, 1)
     for i in 1:36
-        lines!(ax1, sol.t, drugsol[i,:], color=lcmap[1])
+        lines!(ax1, sol.t, drugsol[i,:] ./ 420 , color=lcmap[1], linewidth=2)
     end 
+    x = Observable(0.0)
+    vlines!(ax1, x, color=(:red, 0.5), linewidth=5)
+   
+    p1 = Vector{Mesh}(undef, length(nodes))
+    p2 = Vector{Mesh}(undef, length(nodes))
+
     ax2 = Axis3(g2[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
     hidedecorations!(ax2)
     hidespines!(ax2)
-    plot_roi!(nodes, drugsol[:,end], cmap)
-    ax3 = Axis3(g2[1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    p1 .= plot_roi!(nodes, drugsol[:,1] ./ 420, cmap)
+    ax3 = Axis3(g2[2,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
     hidedecorations!(ax3)
     hidespines!(ax3)
-    plot_roi!(nodes, drugsol[:,end], cmap)
+    p2 .= plot_roi!(nodes, drugsol[:,1] ./ 420, cmap)
     # Colorbar(g1[1:2, 8], limits = (minimum(u0), 1.3), colormap = abcmap,
     #         vertical = true, labelsize=20, flipaxis=true, ticks=collect(0.5:0.25:1.5),
     #         ticksize=18, ticklabelsize=20, labelpadding=10)
-    cb = Colorbar(g2[:, 3], limits = (0, 1), colormap = cmap, ticklabelsize=25, vertical=true, flipaxis=true)
+    cb = Colorbar(g2[:, 2], limits = (0, 1), colormap = cmap, ticklabelsize=25, vertical=true, flipaxis=true)
     colsize!(f.layout, 1, 750)
     colgap!(f.layout, 0)
     colgap!(g2, 0)
@@ -145,6 +192,140 @@ begin
     f
 end
 save(projectdir("output/plots/pkpd/central-pkpd.jpeg"), f)
+
+frames = 10 * 48
+
+record(f, projectdir("output/plots/pkpd/pkpd-video.mp4"), 1:frames; framerate=48) do i
+    x[] = sol.t[i]
+    for k in 1:36
+        p1[k].color[] = get(cmap, drugsol[k,i] ./ 420)
+        p2[k].color[] = get(cmap, drugsol[k,i] ./ 420)
+    end
+end
+
+nodes = get_node_id.(cortex)
+cmap = ColorSchemes.viridis;
+begin 
+    GLMakie.activate!()
+    p1 = Vector{Mesh}(undef, length(nodes))
+    p2 = Vector{Mesh}(undef, length(nodes))
+
+    p3 = Vector{Mesh}(undef, length(nodes))
+    p4 = Vector{Mesh}(undef, length(nodes))
+
+    p5 = Vector{Mesh}(undef, length(nodes))
+    p6 = Vector{Mesh}(undef, length(nodes))
+
+    f = Figure(size=(1500, 900))
+    ax = Axis3(f[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(0,0,0,0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    p1 .= plot_roi!(nodes, absol[:,1], cmap)
+
+    ax = Axis3(f[1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(0,0,0,0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    p2 .= plot_roi!(nodes, absol[:,1], cmap)
+
+    c = Colorbar(f[1, 0], limits = (0, 1), colormap = cmap,
+        vertical = true, label = "Amyloid Conc.", labelsize=25, flipaxis=false,
+        ticksize=18, ticklabelsize=25, labelpadding=3,  ticks=0:0.2:1)
+
+    ax1 = Axis(f[1,3:5],
+            xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
+            xticklabelsize = 25, xticks = LinearTicks(5), xticksize=18,
+            xlabel="Time / Months", xlabelsize = 25,
+            yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
+            yticklabelsize = 25, yticks = LinearTicks(5), yticksize=18,
+            ylabel="", ylabelsize = 25
+    )
+    hidexdecorations!(ax1, grid=false, ticks=false)
+    ylims!(ax1, 0, 1)
+    hidexdecorations!(ax, ticks=false, grid=false)
+
+    for i in 1:36
+        lines!(sol.t, absol[i, :], color=Makie.wong_colors()[1])
+    end
+
+    ax = Axis3(f[2,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(0,0,0,0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    p3 .= plot_roi!(nodes, tausol[:,1], cmap)
+
+    ax = Axis3(f[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(0,0,0,0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    p4 .= plot_roi!(nodes, tausol[:,1], cmap)
+
+    c = Colorbar(f[2, 0], limits = (0, 1), colormap = cmap,
+        vertical = true, label = "Tau Conc.", labelsize=25, flipaxis=false,
+        ticksize=18, ticklabelsize=25, labelpadding=3, ticks=0:0.2:1)
+
+    ax2 = Axis(f[2,3:5],
+            xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
+            xticklabelsize = 25, xticks = LinearTicks(5), xticksize=18,
+            xlabel="Time / Months", xlabelsize = 25,
+            yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
+            yticklabelsize = 25, yticks = LinearTicks(5), yticksize=18,
+            ylabel="", ylabelsize = 25
+    )
+    hidexdecorations!(ax2, grid=false, ticks=false)
+    ylims!(ax2, 0, 1)
+    hidexdecorations!(ax, ticks=false, grid=false)
+
+    for i in 1:36
+        lines!(sol.t, tausol[i, :], color=Makie.wong_colors()[1])
+    end
+
+    ax = Axis3(f[3,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(0,0,0,0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    p5 .= plot_roi!(nodes, drugsol[:,1], cmap)
+
+    ax = Axis3(f[3,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(0,0,0,0))
+    hidedecorations!(ax)
+    hidespines!(ax)
+    p6 .= plot_roi!(nodes, drugsol[:,1], cmap)
+
+    c = Colorbar(f[3, 0], limits = (0, 1), colormap = cmap,
+        vertical = true, label = "Atr.", labelsize=25, flipaxis=false,
+        ticksize=18, ticklabelsize=25, labelpadding=3,  ticks=0:0.2:1)
+
+    ax3 = Axis(f[3,3:5],
+            xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
+            xticklabelsize = 25, xticks = LinearTicks(5), xticksize=18,
+            xlabel="Time / Months", xlabelsize = 25,
+            yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
+            yticklabelsize = 25, yticks = LinearTicks(5), yticksize=18,
+            ylabel="", ylabelsize = 25
+    )
+    
+    ylims!(ax3, 0, 1)
+    for i in 1:36
+        lines!(sol.t, atrsol[i, :], color=Makie.wong_colors()[1])
+    end
+
+    x = Observable(0.0)
+    vlines!(ax1, x, color=(:red, 0.5), linewidth=5)
+    vlines!(ax2, x, color=(:red, 0.5), linewidth=5)
+    vlines!(ax3, x, color=(:red, 0.5), linewidth=5)
+
+    f
+end
+
+frames = 10 * 48
+
+record(f, projectdir("output/plots/pkpd/pkpd-atn-placebo-video.mp4"), 1:frames; framerate=48) do i
+    x[] = ts[i]
+    for k in 1:36
+        p1[k].color[] = get(cmap, absol[k,i])
+        p2[k].color[] = get(cmap, absol[k,i])
+        p3[k].color[] = get(cmap, tausol[k,i])
+        p4[k].color[] = get(cmap, tausol[k,i])
+        p5[k].color[] = get(cmap, atrsol[k,i])
+        p6[k].color[] = get(cmap, atrsol[k,i])
+    end
+end
 
 begin
     GLMakie.activate!()
