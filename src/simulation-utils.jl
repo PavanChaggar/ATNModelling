@@ -54,6 +54,11 @@ function conc(v, v0, vi)
     end 
 end
 
+"""
+    dose(c, t, t0)
+
+Return an exponential dosing with dose `c` function if `t`` > `t_0`` or 0 if `t`` < `t_0``. 
+"""
 function dose(c, t, t0)
     if t < t0   
         return 0 
@@ -62,6 +67,12 @@ function dose(c, t, t0)
     end
 end
 
+"""
+   make_scaled_atn_model(u0, ui, v0, part, L)
+
+Returns an `ODEFunction` correpsonding to the scaled ATN model with 
+fixed parameters ``ui`, `part` and graph Laplacian `L`.
+"""
 function make_scaled_atn_model(ui, part, L)
     function atn(D, x, p, t;)
         u = @view x[1:72]
@@ -79,6 +90,12 @@ function make_scaled_atn_model(ui, part, L)
     return ODEFunction(atn)
 end
 
+"""
+   make_scaled_atn_model(u0, ui, v0, part, L)
+
+Returns an `ODEFunction` correpsonding to the scaled ATN model on a single hemisphere with 
+fixed parameters ``ui`, `part` and graph Laplacian `L`.
+"""
 function make_scaled_atn_model_hemisphere(ui, part, L)
     function atn(D, x, p, t;)
         u = @view x[1:36]
@@ -96,6 +113,13 @@ function make_scaled_atn_model_hemisphere(ui, part, L)
     return ODEFunction(atn)
 end
 
+"""
+   make_scaled_atn_pkpd_model(u0, ui, v0, part, L)
+
+Returns an `ODEFunction` correpsonding to the scaled ATN model on a single hemisphere coupled to a PKPD model. 
+This model has fixed parameters ``ui`, `part` and graph Laplacian `L` and distance graph Laplacian `Ld`. `m` is 
+a mask of regions in which drug enters the brain and `t0` is the initial dosing time.
+"""
 function make_scaled_atn_pkpd_model(ui, part, L, Ld, m, t0=0)
     function atn_pkpd(D, x, p, t)
         u = @view x[1:36]
@@ -113,6 +137,7 @@ function make_scaled_atn_pkpd_model(ui, part, L, Ld, m, t0=0)
     end
     return ODEFunction(atn_pkpd)
 end
+
 """
    make_atn_model(u0, ui, v0, part, L)
 
@@ -137,45 +162,6 @@ function make_atn_model(u0, ui, v0, part, L)
         return nothing
     end
     return ODEFunction(atn)
-end
-
-function make_atn_feedback_model(u0, ui, v0, part, L)
-    function atn(D, x, p, t;)
-        u = @view x[1:72]
-        v = @view x[73:144]
-        a = @view x[145:216]
-
-        α_a, ρ_t, α_t, β, η, δ = p
-        _ui = (ui .- u0) .* δ .* (1 .- a)
-        _vi = ((part .+ (β .* (u .- u0))) .- v0) .* δ .* ( 1 .- a )
-        _vi_max = part .+ (β .* _ui)
-        D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
-        D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
-        D[145:216] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
-        #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
-        return nothing
-    end
-    return ODEFunction(atn)
-end
-
-function make_atn_fixed_model(u0, ui, v0, L)
-    function atn(D, x, p, t;)
-        u = @view x[1:72]
-        v = @view x[73:144]
-        a = @view x[145:216]
-
-        α_a, ρ_t, α_t, κ, β, η = p
-
-        _ui = (ui .- u0) #.* (1 .- a)
-        _vi = ((κ .+ (β .* (u .- u0))) .- v0) #.* ( 1 .- a )
-        _vi_max = (κ .+ (β .* (ui .- u0)))
-        D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
-        D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
-        D[145:216] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
-        #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
-        return nothing
-    end
-    return return ODEFunction(atn)
 end
 
 """
@@ -262,38 +248,43 @@ function simulate_amyloid(us::Vector{Vector{Float64}}, u0::Vector{Float64}, ui::
         [simulate_amyloid(u, u0, ui, a, t) for (u, a, t) in zip(us, as, ts)]
 end
 
-function make_atn_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times)
+function _make_atn_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times)
     function prob_func(prob,i,repeat)
         remake(prob, u0=initial_conditions[i], 
                      p=[α_a[i], ρ_t[i], α_t[i], β, η[i]], saveat=_times[i])
     end
 end
 
-function make_atn_individial_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times)
+function _make_atn_individial_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times)
     function prob_func(prob,i,repeat)
         remake(prob, u0=initial_conditions[i], 
                      p=[α_a[i], ρ_t[i], α_t[i], β[i], η[i]], saveat=_times[i])
     end
 end
 
-function make_atn_fixed_prob_func(initial_conditions, α_a, ρ_t, α_t, κ, β, η, _times)
+function _make_atn_fixed_prob_func(initial_conditions, α_a, ρ_t, α_t, κ, β, η, _times)
     function prob_func(prob,i,repeat)
         remake(prob, u0=initial_conditions[i], 
                      p=[α_a[i], ρ_t[i], α_t[i], κ, β, η[i]], saveat=_times[i])
     end
 end
 
-function make_atn_feedback_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, δ, _times)
+function _make_atn_feedback_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, δ, _times)
     function prob_func(prob,i,repeat)
         remake(prob, u0=initial_conditions[i], 
                      p=[α_a[i], ρ_t[i], α_t[i], β, η[i], δ], saveat=_times[i])
     end
 end
 
-function atn_output_func(sol,i)
+function _atn_output_func(sol,i)
     (sol,false)
 end
 
+"""
+    split_sols_ensemble(esol, ab_idx, tau_idx)
+
+Separate an `EnsembleSolution` for each ATN biomarker. 
+"""
 function split_sols_ensemble(esol, ab_idx, tau_idx)
     d = [[vec(s[1:72, a_idx]), vec(s[73:144, t_idx]), vec(s[145:216, t_idx])] 
           for (s, a_idx, t_idx) in zip(esol, ab_idx, tau_idx)]
@@ -303,18 +294,42 @@ function split_sols_ensemble(esol, ab_idx, tau_idx)
     return ab, tau, vol
 end
 
+"""
+    split_sols_serial(esol, ab_idx, tau_idx)
+
+Separate a single `ODESolution` for each ATN biomarker. 
+"""
 function split_sols_serial(s, a_idx, t_idx)
     vec(s[1:72, a_idx]), vec(s[73:144, t_idx]), vec(s[145:216, t_idx])
 end
 
+"""
+    get_retcodes(es)
+
+Return retcodes for an `EnsembleSolution`.
+"""
 function get_retcodes(es)
     [successful_retcode(sol) for sol in es]
 end
+
+"""
+    success_condition(retcodes)
+
+Confirm all ODE solutions are successful.  
+"""
 
 function success_condition(retcodes)
     allequal(retcodes) && retcodes[1] == 1
 end
 
+"""
+    calculate_colocalisation_order(parc::Parcellation, pst, model, inits, tau_threshold, ab_threshold)
+
+Returns a `DataFrame` containing the ordered list of regions in `parc` according to their colocalisation order. 
+
+The colocalisation order is determined by simulating a solution to `model` using posterior parameters from `pst` and initial conditions `inits`, 
+with a given `tau_threshold` and `ab_threshold`.
+"""
 function calculate_colocalisation_order(parc::Parcellation, pst, model, inits, tau_threshold, ab_threshold)
     nodes = length(parc)
     
@@ -352,8 +367,12 @@ function calculate_colocalisation_order(parc::Parcellation, pst, model, inits, t
     return sorted_df
 end
 
+"""
+    find_seed(parc, sols, tau_threshold, ab_threshold)
 
-function find_seed(parc, sols, tau_cutoff, ab_cutoff)
+For a set of ODE solutions, find the seed colocalisation points given a `tau_threshold` and `ab_threshold`.
+"""
+function find_seed(parc, sols, tau_threshold, ab_threshold)
 
     nodes = length(parc)
     seeds = Vector{Vector{Int64}}()
@@ -362,11 +381,11 @@ function find_seed(parc, sols, tau_cutoff, ab_cutoff)
         ab_sol = asol[1:nodes,:]
         tau_sol = asol[collect(1:nodes) .+ nodes,:]
 
-        tau_seed = findall(x -> x >= tau_cutoff, tau_sol)
+        tau_seed = findall(x -> x >= tau_threshold, tau_sol)
         tau_seed_idx = zeros(nodes, size(asol,2))
         tau_seed_idx[tau_seed] .= 1.0
 
-        ab_seed = findall(x -> x >= ab_cutoff, ab_sol)
+        ab_seed = findall(x -> x >= ab_threshold, ab_sol)
         ab_seed_idx = zeros(nodes, size(asol,2))
         ab_seed_idx[ab_seed] .= 1.0
 
@@ -381,12 +400,17 @@ function find_seed(parc, sols, tau_cutoff, ab_cutoff)
     return seeds
 end
 
+"""
+    calculate_colocalisation_prob(parc, pst, model, inits, tau_prob, ab_prob)
 
-function calculate_colocalisation_prob(parc, pst, model, inits, tau_prob, ab_prob)
+For a given model and parcellation, find the initial colocalisation probability given a 
+posteriod distribution `pst`, initial conditions `inits`, tau threshold `tau_threshold` and ab threshold `ab_threshold`, 
+"""
+function calculate_colocalisation_prob(parc, pst, model, inits, tau_threshold, ab_threshold)
     sols = [simulate(model, inits, (0, 200), params, saveat=0.1) 
                     for params in zip( vec(pst[:Am_a]), vec(pst[:Pm_t]), vec(pst[:Am_t]), vec(pst[:β]), vec(pst[:Em]))];
 
-    seed_idx = reduce(vcat, find_seed(parc, sols, tau_prob, ab_prob))
+    seed_idx = reduce(vcat, find_seed(parc, sols, tau_threshold, ab_threshold))
 
     nodes = length(parc)
     seed_count = zeros(nodes)

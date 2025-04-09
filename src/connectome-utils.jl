@@ -36,6 +36,11 @@ function get_dkt_names(parc::Parcellation)
     [dktdict[i] for i in get_node_id.(parc)]
 end
 
+"""
+    get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2)
+
+Load a `Connectome` with parameters specified by keyword-arguments. 
+"""
 function get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2)
     c = Connectome(connectome_path())
     if include_subcortex
@@ -60,6 +65,12 @@ end
 _fsdict = FS2Connectome()
 _getbraak(fs_regions) = [_fsdict[i] for i in fs_regions]
 
+"""
+    get_braak_regions()
+
+Returns a Vector{Vector{Int64}} with each Vector{Int64} corresponding to a set of Braak regions. 
+The first Vector{Vector{Int64}} corresponds to the first Braak region and so on. 
+"""
 function get_braak_regions()
     braak_dict = load(datadir("derivatives/braak-dict.jld2"))
     ks = ["1", "2/3", "4", "5", "6"]
@@ -67,8 +78,20 @@ function get_braak_regions()
     return map(_getbraak, fs_braak_stages)
 end
 
+
+"""
+    distance(x::Vector{Float64}, y::Vector{Float64})
+
+Calculate the Euclidean distance between two points.
+"""
 distance(x::Vector{Float64}, y::Vector{Float64}) = norm(x .- y, 2)
 
+"""
+    get_distance_laplacian(; hemisphere = "right")
+
+Returns a Matrix{Float64} corresponding to the Laplacian matrix of a graph G = (V, E), where v in V 
+are regions in the DK atlas and e in E are edges corresponding to inverse squared Euclidean distance.
+"""
 function get_distance_laplacian(; hemisphere = "right")
     parc = get_parcellation() |> get_cortex
     cortex = filter(x -> get_hemisphere(x) == hemisphere, parc)

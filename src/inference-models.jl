@@ -3,8 +3,8 @@ module InferenceModels
 using Turing
 using LinearAlgebra: I
 using ATNModelling.SimulationUtils: resimulate, simulate_amyloid, 
-                   make_atn_prob_func, make_atn_feedback_prob_func, atn_output_func, split_sols_ensemble, split_sols_serial,
-                   success_condition, get_retcodes, make_atn_fixed_prob_func, make_atn_individial_prob_func
+                   _make_atn_prob_func, _make_atn_feedback_prob_func, _atn_output_func, split_sols_ensemble, split_sols_serial,
+                   success_condition, get_retcodes, _make_atn_fixed_prob_func, _make_atn_individial_prob_func
 using SciMLBase: successful_retcode
 using DifferentialEquations: ODEProblem, EnsembleProblem, Tsit5, solve, remake
 using ADTypes: AutoForwardDiff
@@ -40,26 +40,6 @@ assumes i.i.d Gaussian noise for each data modality.
     ab_data ~ MvNormal(vec(sol[1:72,:]), σ_a^2 * I)
     tau_data ~ MvNormal(vec(sol[73:144,:]), σ_t^2 * I)
     vol_data ~ MvNormal(vec(sol[145:216,:]), σ_v^2 * I)
-end
-
-"""
-    fit_model(model, ab, tau, atr, args...; n_samples=1000)
-
-Fits a generative model `model`, to biomarker data `ab`, `tau` and `atr`. 
-Args should follow the input order of the `model`. Sampling is performed using 
-a NUTS sampler with default settings.
-"""
-function fit_model(model, ab, tau, atr, args...; 
-                    n_samples=1000, n_chains=1, adbackend=AutoForwardDiff(chunksize=0))
-    m = model(args...)
-    pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
-    pst()
-    println("Starting Inference")
-    samples = sample(pst, NUTS(0.8; adtype=adbackend), 
-    MCMCSerial(), n_samples, n_chains)
-    println("Number of Divergences: $(sum(samples[:numerical_error]))")
-    display(summarize(samples))
-    return samples
 end
 
 """
@@ -102,7 +82,18 @@ function fit_ab_model(model, ab, args...; n_samples=1000, n_chains=1)
     return samples
 end
 
-@model function ensemble_atn_truncated(prob, inits, times, ab_tidx, tau_tidx, n)
+"""
+    ensemble_atn(prob::ODEProblem, 
+                 inits::Vector{Vector{Float64}}, 
+                 times::Vector{Vector{Float64}}, 
+                 ab_tidx::Vector{Vector{Int64}}, 
+                 tau_tidx::Vector{Vector{Int64}}, 
+                 n::Int)
+
+Hierarhical probabilitstic model for calibrating the ATN with longitudinal neuroimaging data. 
+The model assumes a pooled coupling parameter between Aβ and tau. 
+"""
+@model function ensemble_atn(prob::ODEProblem, inits::Vector{Vector{Float64}}, times::Vector{Vector{Float64}}, ab_tidx::Vector{Vector{Int64}}, tau_tidx::Vector{Vector{Int64}}, n::Int)
     σ_a  ~ InverseGamma(2,3)
     σ_t  ~ InverseGamma(2,3)
     σ_v  ~ InverseGamma(2,3)
@@ -150,6 +141,15 @@ end
     vol_data ~ MvNormal(vol_preds, σ_v^2 * I) 
 end
 
+"""
+    ensemble_atn_harmonised(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
+                            fbp_prob, fbp_inits, fbp_times, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
+
+Hierarhical probabilitstic model for calibrating the ATN with longitudinal neuroimaging data with 
+Aβ data from both Florbetaben (fbb) and Florbetapir(fbp). 
+
+This model assumes i.i.d noise for pooled across Aβ tracers and a pooled coupling parameter between Aβ and tau. 
+"""
 @model function ensemble_atn_harmonised(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
                                         fbp_prob, fbp_inits, fbp_times, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
     σ_a  ~ InverseGamma(2,3)
@@ -208,6 +208,15 @@ end
 end
 
 
+"""
+    ensemble_atn_harmonised_tracer(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
+                                   fbp_prob, fbp_inits, fbp_times, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
+
+Hierarhical probabilitstic model for calibrating the ATN with longitudinal neuroimaging data with 
+Aβ data from both Florbetaben (fbb) and Florbetapir(fbp). 
+
+This model assumes i.i.d noise for each Aβ tracers and a pooled coupling parameter between Aβ and tau. 
+"""
 @model function ensemble_atn_harmonised_tracer(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
                                         fbp_prob, fbp_inits, fbp_times, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
     σ_fbb  ~ InverseGamma(2,3)
@@ -266,6 +275,15 @@ end
 end
 
 
+"""
+    ensemble_atn_harmonised_tracer(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
+                                   fbp_prob, fbp_inits, fbp_times, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
+
+Hierarhical probabilitstic model for calibrating the ATN with longitudinal neuroimaging data with 
+Aβ data from both Florbetaben (fbb) and Florbetapir(fbp). 
+
+This model assumes i.i.d noise pooled across Aβ tracers and a personalised coupling parameter between Aβ and tau. 
+"""
 @model function ensemble_atn_harmonised_individual(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
     fbp_prob, fbp_inits, fbp_times, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
     σ_a  ~ InverseGamma(2,3)
@@ -325,154 +343,36 @@ end
     fbp_vol_data ~ MvNormal(fbp_vol_preds, σ_v^2 * I) 
 end
 
+"""
+    fit_model(model, ab, tau, atr, args...; n_samples=1000)
 
-@model function ensemble_atn_truncated_fixed(prob, inits, times, ab_tidx, tau_tidx, n)
-    σ_a  ~ InverseGamma(2,3)
-    σ_t  ~ InverseGamma(2,3)
-    σ_v  ~ InverseGamma(2,3)
-    
-    Am_a ~ LogNormal()
-    As_a ~ truncated(Normal(), lower=0)
-
-    Pm_t ~ LogNormal()
-    Ps_t ~ truncated(Normal(), lower=0)
-    
-    Am_t ~ LogNormal()
-    As_t ~ truncated(Normal(), lower=0)
-
-    Em   ~ LogNormal()
-    Es   ~ truncated(Normal(), lower=0)
-
-    α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
-    ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
-    α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
-    η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
-
-    κ    ~ truncated(Normal(1.8, 0.1), lower=0)
-    β    ~ truncated(Normal(2.1, 0.25), lower=0)
-
-    ensemble_prob = EnsembleProblem(prob, 
-                                    prob_func=make_atn_fixed_prob_func(inits, α_a, ρ_t, α_t, κ, β, η, times), 
-                                    output_func=atn_output_func)
-    
-    _esol = solve(ensemble_prob,
-                    Tsit5(),
-		            verbose=false,
-                    abstol = 1e-6, 
-                    reltol = 1e-6, 
-                    trajectories=n)
-
-    if !success_condition(get_retcodes(_esol))
-        Turing.@addlogprob! -Inf
-        println(findall(x -> x == 0, get_retcodes(_esol)))
-        println("failed")
-        return nothing
-    end
-    ab_preds, tau_preds, vol_preds =  split_sols_ensemble(_esol, ab_tidx, tau_tidx)
-    
-    ab_data ~ MvNormal(ab_preds, σ_a^2 * I)
-    tau_data ~ MvNormal(tau_preds, σ_t^2 * I)
-    vol_data ~ MvNormal(vol_preds, σ_v^2 * I) 
+Fits a generative model `model`, to biomarker data `ab`, `tau` and `atr`. 
+Args should follow the input order of the `model`. Sampling is performed using 
+a NUTS sampler with default settings.
+"""
+function fit_model(model, ab, tau, atr, args...; 
+                    n_samples=1000, n_chains=1, adbackend=AutoForwardDiff(chunksize=0))
+    m = model(args...)
+    pst = m | (ab_data = ab, tau_data = tau, vol_data = atr,);
+    pst()
+    println("Starting Inference")
+    samples = sample(pst, NUTS(0.8; adtype=adbackend), 
+    MCMCSerial(), n_samples, n_chains)
+    println("Number of Divergences: $(sum(samples[:numerical_error]))")
+    display(summarize(samples))
+    return samples
 end
 
-@model function ensemble_atn_feedback_truncated(prob, inits, times, ab_tidx, tau_tidx, n)
-    σ_a  ~ InverseGamma(2,3)
-    σ_t  ~ InverseGamma(2,3)
-    σ_v  ~ InverseGamma(2,3)
-    
-    Am_a ~ truncated(Normal(), lower=0)
-    As_a ~ truncated(Normal(), lower=0)
+"""
+    serial_atn(prob::ODEProblem, 
+                 inits::Vector{Vector{Float64}}, 
+                 times::Vector{Vector{Float64}}, 
+                 ab_tidx::Vector{Vector{Int64}}, 
+                 tau_tidx::Vector{Vector{Int64}}, 
+                 n::Int)
 
-    Pm_t ~ truncated(Normal(), lower=0)
-    Ps_t ~ truncated(Normal(), lower=0)
-    
-    Am_t ~ truncated(Normal(), lower=0)
-    As_t ~ truncated(Normal(), lower=0)
-
-    Em   ~ truncated(Normal(), lower=0)
-    Es   ~ truncated(Normal(), lower=0)
-    
-    β    ~ Uniform(0., 7.5)
-    δ    ~ truncated(Normal(1.0, 1.0), lower=0., upper=1.0)
-
-    α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
-    ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
-    α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
-    η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
-
-    ensemble_prob = EnsembleProblem(prob, 
-                                    prob_func=make_atn_feedback_prob_func(inits, α_a, ρ_t, α_t, β, η, δ, times), 
-                                    output_func=atn_output_func)
-    
-    _esol = solve(ensemble_prob,
-                    Tsit5(),
-		            verbose=false,
-                    abstol = 1e-6, 
-                    reltol = 1e-6, 
-                    trajectories=n)
-
-    if !success_condition(get_retcodes(_esol))
-        Turing.@addlogprob! -Inf
-        println(findall(x -> x == 0, get_retcodes(_esol)))
-        println("failed")
-        return nothing
-    end
-    ab_preds, tau_preds, vol_preds =  split_sols_ensemble(_esol, ab_tidx, tau_tidx)
-    
-    ab_data ~ MvNormal(ab_preds, σ_a^2 * I)
-    tau_data ~ MvNormal(tau_preds, σ_t^2 * I)
-    vol_data ~ MvNormal(vol_preds, σ_v^2 * I) 
-end
-
-
-@model function ensemble_atn(prob, inits, times, ab_tidx, tau_tidx, n)
-    σ_a  ~ InverseGamma(2,3)
-    σ_t  ~ InverseGamma(2,3)
-    σ_v  ~ InverseGamma(2,3)
-    
-    Am_a ~ Normal()
-    As_a ~ truncated(Normal(), lower=0)
-
-    Pm_t ~ truncated(Normal(), lower=0)
-    Ps_t ~ truncated(Normal(), lower=0)
-    
-    Am_t ~ truncated(Normal(), lower=0)
-    As_t ~ truncated(Normal(), lower=0)
-
-    Em   ~ truncated(Normal(), lower=0)
-    Es   ~ truncated(Normal(), lower=0)
-    
-    β    ~ Uniform(0., 5.0)
-    
-    α_a  ~ filldist(Normal(Am_a, As_a), n)
-    ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
-    α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
-    η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
-
-    ensemble_prob = EnsembleProblem(prob, 
-                                    prob_func=make_atn_prob_func(inits, α_a, ρ_t, α_t, β, η, times), 
-                                    output_func=atn_output_func)
-    
-    _esol = solve(ensemble_prob,
-                    Tsit5(),
-		            verbose=false,
-                    abstol = 1e-6, 
-                    reltol = 1e-6, 
-                    trajectories=n)
-
-    if !success_condition(get_retcodes(_esol))
-        Turing.@addlogprob! -Inf
-        println(findall(x -> x == 0, get_retcodes(_esol)))
-        println("failed")
-        return nothing
-    end
-    ab_preds, tau_preds, vol_preds =  split_sols_ensemble(_esol, ab_tidx, tau_tidx)
-    
-    ab_data ~ MvNormal(ab_preds, σ_a^2 * I)
-    tau_data ~ MvNormal(tau_preds, σ_t^2 * I)
-    vol_data ~ MvNormal(vol_preds, σ_v^2 * I) 
-end
-
+Identical to the `ensemble_atn` model but does not use parallelism for ODE solving.
+"""
 @model function serial_atn(ab_data, tau_data, vol_data, prob, inits, times, ab_tidx, tau_tidx, n)
     σ_a  ~ InverseGamma(2,3)
     σ_t  ~ InverseGamma(2,3)
@@ -516,6 +416,13 @@ end
         
     end
 end
+
+
+"""
+    fit_serial_model(model, ab, tau, atr, args...; n_samples=1000)
+
+Fits the serial version of the generative model to ATN biomarker data. 
+"""
 
 function fit_serial_atn(model, ab_data, tau_data, vol_data, args...; 
                         n_samples=1000, n_chains=1, adbackend=AutoForwardDiff(chunksize=0))

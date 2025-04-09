@@ -270,6 +270,13 @@ function normalise!(data::Vector{Matrix{Float64}}, lower::Vector{Float64})
     @assert allequal([allequal(d .>= lower) for d in data])
 end
 
+"""
+    calc_times(ab::ADNISubject, tau::ADNISubject)
+    calc_times(ab::ADNIDataset, tau::ADNIDataset)
+
+Calculate the relative times of Aβ and tau PET scans, normalised to the first scan or either modality. 
+"""
+
 function calc_times(ab::ADNISubject, tau::ADNISubject)
     ab_dates = get_dates(ab)
     tau_dates = get_dates(tau)
@@ -293,7 +300,15 @@ function calc_times(ab::ADNIDataset, tau::ADNIDataset)
     return ab_times, tau_times
 end
 
-function align_data(ab_data, tau_data; min_tau_scans=3)
+"""
+    align_data(ab_data::ADNIDataset, tau_data::ADNIDataset; min_tau_scans=3)
+
+For a given pair of Aβ PET and tau PET datasets, returns a pair of ADNIDatasets 
+contains only subjects who have both Aβ PET and tau PET scans, including an initial scan within 
+3 months of each other. The `min_tau_scans` keyword can be used to ensure each subject 
+has a given number of longitudinal scans.
+"""
+function align_data(ab_data::ADNIDataset, tau_data::ADNIDataset; min_tau_scans=3)
     pos_ids = get_id.(tau_data)
     ab_tau_pos = filter(x -> get_id(x) ∈ pos_ids, ab_data)
     ab_tau_pos_ids = get_id.(ab_tau_pos)
@@ -332,10 +347,20 @@ function align_data(ab_data, tau_data; min_tau_scans=3)
     return ab, tau
 end
 
+"""
+    get_time_idx(d::Vector{Vector{Float64}}, ts::Vector{Vector{Float64}})
+
+For a subset of times `d` in `ts`, find the index for `d` in `ts`. 
+"""
 function get_time_idx(d::Vector{Vector{Float64}}, ts::Vector{Vector{Float64}})
     [findall(x -> x ∈ a, t) for (a, t) in zip(d, ts)]
 end
 
+"""
+    vectorise(d::Vector{Matrix{Float64}})
+
+Return a Vector{Float64} from a Vector{Matrix{Float64}}.
+"""
 function vectorise(d::Vector{Matrix{Float64}})
     reduce(vcat, vec.(d))
 end
