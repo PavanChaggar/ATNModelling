@@ -18,7 +18,7 @@ using Serialization
 # --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
-tracer = "FBP"
+tracer = "FBB"
 u0, ui = load_ab_params(tracer=tracer)
 ui_diff = ui .- u0
 v0, vi, part = load_tau_params()
@@ -77,7 +77,7 @@ sol = solve(prob, Tsit5())
 inits = [[ab; tau; vol] for (ab, tau, vol) in zip(ab_inits, tau_inits, vol_inits)]
 n_subjects = length(ab)
 
-pst = deserialize(projectdir("output/chains/population-atn/pst-samples-$(tracer)-1x1000.jls"));
+pst = deserialize(projectdir("output/chains/population-atn/pst-samples-fixed-beta-$(tracer)-1x1000.jls"));
 summarize(pst)
 meanpst = mean(pst)
 
@@ -212,7 +212,7 @@ begin
 
     for sub in 1:22
         p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
-        meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β"), :mean], 
+        meanpst[Symbol("α_t[$sub]"), :mean], 3.5, 
         meanpst[Symbol("η[$sub]"), :mean]]
         
         pstprob = remake(prob, u0=inits[sub], p=p)

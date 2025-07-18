@@ -118,8 +118,8 @@ The model assumes a pooled coupling parameter between Aβ and tau.
     η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
 
     ensemble_prob = EnsembleProblem(prob, 
-                                    prob_func=make_atn_prob_func(inits, α_a, ρ_t, α_t, β, η, times), 
-                                    output_func=atn_output_func)
+                                    prob_func=_make_atn_prob_func(inits, α_a, ρ_t, α_t, β, η, times), 
+                                    output_func=_atn_output_func)
     
     _esol = solve(ensemble_prob,
                     Tsit5(),

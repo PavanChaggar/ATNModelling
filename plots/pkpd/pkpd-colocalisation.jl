@@ -234,6 +234,196 @@ noab_sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)
 noab_tau = mean(Array(noab_sol[37:72,end])[rois])
 noab_atr= mean(Array(noab_sol[73:108,end])[rois])
 
+
+begin
+    GLMakie.activate!()
+    cmap = ColorSchemes.Blues
+    f = Figure(size=(1200, 1000), fontsize=15)
+    g = f[1,1] = GridLayout()
+    g1 = g[1:4, 1] = GridLayout() 
+    G2 = g[1:4, 2] = GridLayout()
+    g2 = G2[1, 1] = GridLayout()
+    g3 = G2[2, 1]= GridLayout()
+    ax1 = Axis(g1[3:4,1], ylabel="Aβ", ytickformat="{:.1f}", ylabelsize=20, xlabelsize=20)
+    hidexdecorations!(ax1, grid=false)
+    ylims!(ax1, 0.0, 1.05)
+    ax2 = Axis(g1[5:6,1], ylabel="Tau", ytickformat="{:.1f}", xlabel="Time / Months", ylabelsize=20, xlabelsize=20)
+    hidexdecorations!(ax2, grid=false)
+    ylims!(ax2, 0.0, 1.05)
+    ax3 = Axis(g1[7:8,1], ylabel="Atr", ytickformat="{:.2f}", xlabel="Time / Months", ylabelsize=20, xlabelsize=20)
+    ylims!(ax3, 0.0, 1.05)
+    # hidexdecorations!(ax3, grid=false)
+    ax4 = Axis(g1[1:2,1], ylabel="Drug\nμg / ml", ytickformat="{:.0f}", xlabel="Time / Months", ylabelsize=20, xlabelsize=20)
+    ylims!(ax4, 0.0, 250.05)
+    hidexdecorations!(ax4, grid=false)
+    absols = Vector{Array{Float64}}()
+    tausols = Vector{Array{Float64}}()
+    atrsols = Vector{Array{Float64}}()
+    drugsols = Vector{Array{Float64}}()
+    for (i, t) in enumerate(0:24:360)
+        atn_pkpd = make_scaled_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36], Lh, Ld, m, t)
+
+        
+        # amyloid_production = 1. / 12
+        # tau_transport = 0.2 / 12
+        # tau_production = 0.06 /12
+        # coupling = 4.5
+        # atrophy = 0.1 / 12
+        drug_concentration = 100.
+        drug_transport = 0.5 / 12
+        drug_effect = 0.1 / 12
+        drug_clearance = 0.5 / 12
+        sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
+                        (0.0, 360.0), [amyloid_production, tau_transport, tau_production, 
+                                                coupling, atrophy, 
+                                                drug_transport, drug_effect, 
+                                                drug_concentration, drug_clearance]; 
+                                                saveat=ts, tol=1e-12)
+
+        push!(absols, Array(sol[1:36,:]))
+        push!(tausols, Array(sol[37:72,:]))
+        push!(atrsols, Array(sol[73:108,:]))
+        push!(drugsols, Array(sol[109:end,:]))    
+    end
+
+    ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
+    tau_c = sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5);
+    atr_c = sequential_palette(15, s = 0.9, c = 0.9, w =0.25, b = 0.5);
+    abcmap = ColorScheme(ab_c);
+    taucmap = ColorScheme(tau_c); #reverse(ColorSchemes.RdYlBu);
+    atrcmap = ColorScheme(atr_c); 
+
+    nodes = get_node_id.(cortex)
+    ax_init_1 = Axis3(g2[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax_init_1)
+    hidespines!(ax_init_1)
+    plot_roi!(nodes, absols[1][:,1], abcmap)
+    ax_init_1 = Axis3(g2[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax_init_1)
+    hidespines!(ax_init_1)
+    plot_roi!(nodes, absols[1][:,1], abcmap)
+    cb = Colorbar(g2[2, 1:2], limits = (0.0, 1.0), colormap = abcmap, label="Aβ",
+    vertical = false, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1))
+    cb.alignmode = Mixed(right = 0)
+
+
+    ax_init_2 = Axis3(g2[1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax_init_2)
+    hidespines!(ax_init_2)
+    plot_roi!(nodes, tausols[1][:,1], taucmap)
+    ax_init_2 = Axis3(g2[1,4], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax_init_2)
+    hidespines!(ax_init_2)
+    plot_roi!(nodes, tausols[1][:,1], taucmap)
+    cb = Colorbar(g2[2, 3:4], limits = (0.0, 1.0), colormap = taucmap, label="Tau",
+    vertical = false, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1))
+    cb.alignmode = Mixed(right = 0)
+
+    ax = Axis(g3[1,1], xlabel="Tau", ylabel="Atr.", xlabelsize=25, ylabelsize=25 )
+    xlims!(ax, 0.4, 1.0)
+    ylims!(ax, 0, 0.7)
+    tau_end = [mean(t[rois, end]) for t in tausols]
+    atr_end = [mean(t[rois, end]) for t in atrsols]
+    for i in eachindex(tau_end)
+        linesegments!([0, tau_end[i]], [atr_end[i], atr_end[i]], linestyle=:dash, color=(:grey, 0.75))
+        linesegments!([tau_end[i], tau_end[i]], [0, atr_end[i]], linestyle=:dash, color=(:grey, 0.75))
+    end
+    sc = scatter!(tau_end, atr_end)
+    # scatter!(noab_tau, noab_atr)
+
+    ax.alignmode = Mixed(left = 0, right = 0)
+
+    ax = Axis(g3[1,2], xlabel="t0", ylabel="Δ Atr.", xlabelsize=25, ylabelsize=25,xticks=collect(0:60:300))
+    ylims!(ax, 0, 0.075)
+    tau_end = [mean(t[rois, end]) for t in tausols]
+    atr_end = [mean(t[rois, end]) for t in atrsols]
+    scatter!(collect(24:24:360), [atr_end[i + 2] - atr_end[i + 1] for i in 0:14], label="Atr")
+    scatter!(collect(24:24:360), [tau_end[i + 2] - tau_end[i + 1] for i in 0:14], label="Tau")
+    # scatter!(collect(6:6:120), [tau_end[i + 2] - tau_end[i + 1] for i in 0:19])
+    vlines!(sol.t[coloc_t[2]], linestyle=:dash, color=:black, linewidth=2.5)
+    ax.alignmode = Mixed(left = 0, right = 0)
+    axislegend(ax, unique=true, position=:rt,  framevisible=false, fontsize=25, patchsize=(25,25))
+
+
+    # ax_init_3 = Axis3(g[3][1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    # hidedecorations!(ax_init_3)
+    # hidespines!(ax_init_3)
+    # ax_init_3 = Axis3(g[3][1,3], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    # hidedecorations!(ax_init_3)
+    # hidespines!(ax_init_3)
+
+    # ax_init_1 = Axis3(g[4][1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    # hidedecorations!(ax_init_1)
+    # hidespines!(ax_init_1)
+    # ax_init_1 = Axis3(g[4][1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    # hidedecorations!(ax_init_1)
+    # hidespines!(ax_init_1)
+    linestyles = [:solid, :dash, :dashdot, :dashdotdot, :dot]
+    labels = ["t0 = 0", "t0 = 48","t0 = 120","t0 = 216","Placebo"]
+    solidx = [1, 3, 6, 10, 16]
+    for (_absol, _tausol, _atrsol, _drugsol, ls, label) in zip(absols[solidx], tausols[solidx], atrsols[solidx], drugsols[solidx], reverse(linestyles), labels)
+        absol = vec(mean(_absol[rois,:], dims=1))
+        tausol = vec(mean(_tausol[rois,:], dims=1))
+        atrsol = vec(mean(_atrsol[rois,:], dims=1))
+        drugsol = vec(mean(_drugsol[rois,:], dims=1)) 
+        lines!(ax1, sol.t, vec(absol), linewidth=3, linestyle = (ls), color=get(abcmap, maximum(absol)))
+        lines!(ax2, sol.t, vec(tausol), linewidth=3, linestyle = (ls), color=get(taucmap, maximum(tausol)))
+        lines!(ax3, sol.t, vec(atrsol), linewidth=3, linestyle = (ls), color=get(atrcmap, maximum(atrsol)/0.5))
+        lines!(ax4, sol.t, vec(drugsol), linewidth=3, linestyle = (ls), color=get(taucmap, 0.8) , label = label)
+    end
+    # le = [LineElement(color = :black, linestyle = ls) for ls in reverse(linestyles)]
+    # Le = Legend(g1[5, 1], le, labels, nbanks=5, framevisible=false, tellheight=false)
+    # Le.alignmode = Mixed(bottom=0, top = 0)
+    axislegend(ax4, unique=true, position=:lt,  orientation = :horizontal, framevisible=false, fontsize=5, patchsize=(30,10))
+    gb = f[2,:] = GridLayout()
+    t0s = collect(0:24:360)[solidx]
+    for (t, l) in zip(1:5, ["t0 = $(t0s[1])", "t0 = $(t0s[2])","t0 = $(t0s[3])","t0 = $(t0s[4])","Placebo"])
+        Label(gb[0,1+t], l, tellwidth=false, fontsize=20)
+        nodes = get_node_id.(cortex)
+        ax_init_1 = Axis3(gb[1,1+t], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(0.0,0.0,0.0,0.0))
+        hidedecorations!(ax_init_1)
+        hidespines!(ax_init_1)
+        plot_roi!(nodes, tausols[solidx][t][:,end], taucmap)
+        ax_init_1 = Axis3(gb[2,1+t], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(0.0,0.0,0.0,0.0))
+        hidedecorations!(ax_init_1)
+        hidespines!(ax_init_1)
+        plot_roi!(nodes, tausols[solidx][t][:,end], taucmap)
+    
+        ax_init_2 = Axis3(gb[3,1+t], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(0.0,0.0,0.0,0.0))
+        hidedecorations!(ax_init_2)
+        hidespines!(ax_init_2)
+        plot_roi!(nodes, atrsols[solidx][t][:,end], atrcmap)
+        ax_init_2 = Axis3(gb[4,1+t], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(0.0,0.0,0.0,0.0))
+        hidedecorations!(ax_init_2)
+        hidespines!(ax_init_2)
+        plot_roi!(nodes, atrsols[solidx][t][:,end], atrcmap) 
+    end
+    cb = Colorbar(gb[1:2, 1], limits = (0.0, 1.0), colormap = taucmap, label="Tau",
+    vertical = true, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1))
+    cb = Colorbar(gb[3:4, 1], limits = (0.0, 1.0), colormap = atrcmap, label="Atr.",
+    vertical = true, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1))
+    # Label(gb[1:2, 1], "Tau", rotation = pi/2,  justification = :center, tellheight=false, tellwidth=false)
+    # Label(gb[3:4, 1], "Atr", rotation = pi/2,  justification = :center, tellheight=false, tellwidth=false)
+    # colsize!(gb, 1, 0)
+    # cb.alignmode = Mixed(left = 0)
+
+    colsize!(g, 1, 500)
+    rowsize!(G2, 1, 150)
+    rowsize!(f.layout, 1, 450)
+    colgap!(f.layout, 100) 
+    rowgap!(f.layout, 25)
+
+    Label(g1[1, 1, TopLeft()], "A", fontsize = 25, font = :bold, padding = (-15, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
+    Label(g2[1, 1, TopLeft()], "B", fontsize = 25, font = :bold, padding = (10, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
+    Label(g3[1, 1, TopLeft()], "C", fontsize = 25, font = :bold, padding = (10, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
+    Label(gb[1, 1, TopLeft()], "D", fontsize = 25, font = :bold, padding = (-25, 0, 0, -75), halign = :left, tellheight=false, tellwidth=false)
+    
+    display(f)
+    
+end
+save(projectdir("output/plots/pkpd/atn-pkpd-coloc-2.jpeg"), f)
+
+
 # begin
 #     GLMakie.activate!()
 #     cmap = ColorSchemes.Blues
@@ -403,194 +593,6 @@ noab_atr= mean(Array(noab_sol[73:108,end])[rois])
 # scatter(collect(6:6:120), [atr_end[i + 2] - atr_end[i + 1] for i in 0:19])
 
 # scatter([tau_end[i+2] - tau_end[i + 1] for i in 0:19], [atr_end[i + 2] - atr_end[i + 1] for i in 0:19])
-
-begin
-    GLMakie.activate!()
-    cmap = ColorSchemes.Blues
-    f = Figure(size=(1200, 1000), fontsize=15)
-    g = f[1,1] = GridLayout()
-    g1 = g[1:4, 1] = GridLayout() 
-    G2 = g[1:4, 2] = GridLayout()
-    g2 = G2[1, 1] = GridLayout()
-    g3 = G2[2, 1]= GridLayout()
-    ax1 = Axis(g1[3:4,1], ylabel="Aβ", ytickformat="{:.1f}", ylabelsize=20, xlabelsize=20)
-    hidexdecorations!(ax1, grid=false)
-    ylims!(ax1, 0.0, 1.05)
-    ax2 = Axis(g1[5:6,1], ylabel="Tau", ytickformat="{:.1f}", xlabel="Time / Months", ylabelsize=20, xlabelsize=20)
-    hidexdecorations!(ax2, grid=false)
-    ylims!(ax2, 0.0, 1.05)
-    ax3 = Axis(g1[7:8,1], ylabel="Atr", ytickformat="{:.2f}", xlabel="Time / Months", ylabelsize=20, xlabelsize=20)
-    ylims!(ax3, 0.0, 1.05)
-    # hidexdecorations!(ax3, grid=false)
-    ax4 = Axis(g1[1:2,1], ylabel="Drug\nμg / ml", ytickformat="{:.0f}", xlabel="Time / Months", ylabelsize=20, xlabelsize=20)
-    ylims!(ax4, 0.0, 250.05)
-    hidexdecorations!(ax4, grid=false)
-    absols = Vector{Array{Float64}}()
-    tausols = Vector{Array{Float64}}()
-    atrsols = Vector{Array{Float64}}()
-    drugsols = Vector{Array{Float64}}()
-    for (i, t) in enumerate(0:24:360)
-        atn_pkpd = make_scaled_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36], Lh, Ld, m, t)
-
-        
-        # amyloid_production = 1. / 12
-        # tau_transport = 0.2 / 12
-        # tau_production = 0.06 /12
-        # coupling = 4.5
-        # atrophy = 0.1 / 12
-        drug_concentration = 100.
-        drug_transport = 0.5 / 12
-        drug_effect = 0.025 / 12
-        drug_clearance = 0.5 / 12
-        sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
-                        (0.0, 360.0), [amyloid_production, tau_transport, tau_production, 
-                                                coupling, atrophy, 
-                                                drug_transport, drug_effect, 
-                                                drug_concentration, drug_clearance]; 
-                                                saveat=ts, tol=1e-12)
-
-        push!(absols, Array(sol[1:36,:]))
-        push!(tausols, Array(sol[37:72,:]))
-        push!(atrsols, Array(sol[73:108,:]))
-        push!(drugsols, Array(sol[109:end,:]))    
-    end
-
-    ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
-    tau_c = sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5);
-    atr_c = sequential_palette(15, s = 0.9, c = 0.9, w =0.25, b = 0.5);
-    abcmap = ColorScheme(ab_c);
-    taucmap = ColorScheme(tau_c); #reverse(ColorSchemes.RdYlBu);
-    atrcmap = ColorScheme(atr_c); 
-
-    nodes = get_node_id.(cortex)
-    ax_init_1 = Axis3(g2[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-    hidedecorations!(ax_init_1)
-    hidespines!(ax_init_1)
-    plot_roi!(nodes, absols[1][:,1], abcmap)
-    ax_init_1 = Axis3(g2[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-    hidedecorations!(ax_init_1)
-    hidespines!(ax_init_1)
-    plot_roi!(nodes, absols[1][:,1], abcmap)
-    cb = Colorbar(g2[2, 1:2], limits = (0.0, 1.0), colormap = abcmap, label="Aβ",
-    vertical = false, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1))
-    cb.alignmode = Mixed(right = 0)
-
-
-    ax_init_2 = Axis3(g2[1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-    hidedecorations!(ax_init_2)
-    hidespines!(ax_init_2)
-    plot_roi!(nodes, tausols[1][:,1], taucmap)
-    ax_init_2 = Axis3(g2[1,4], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-    hidedecorations!(ax_init_2)
-    hidespines!(ax_init_2)
-    plot_roi!(nodes, tausols[1][:,1], taucmap)
-    cb = Colorbar(g2[2, 3:4], limits = (0.0, 1.0), colormap = taucmap, label="Tau",
-    vertical = false, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1))
-    cb.alignmode = Mixed(right = 0)
-
-    ax = Axis(g3[1,1], xlabel="Tau", ylabel="Atr.", xlabelsize=25, ylabelsize=25 )
-    xlims!(ax, 0.4, 1.0)
-    ylims!(ax, 0, 0.7)
-    tau_end = [mean(t[rois, end]) for t in tausols]
-    atr_end = [mean(t[rois, end]) for t in atrsols]
-    for i in eachindex(tau_end)
-        linesegments!([0, tau_end[i]], [atr_end[i], atr_end[i]], linestyle=:dash, color=(:grey, 0.75))
-        linesegments!([tau_end[i], tau_end[i]], [0, atr_end[i]], linestyle=:dash, color=(:grey, 0.75))
-    end
-    sc = scatter!(tau_end, atr_end)
-    # scatter!(noab_tau, noab_atr)
-
-    ax.alignmode = Mixed(left = 0, right = 0)
-
-    ax = Axis(g3[1,2], xlabel="t0", ylabel="Δ Atr.", xlabelsize=25, ylabelsize=25,xticks=collect(0:60:300))
-    ylims!(ax, 0, 0.075)
-    tau_end = [mean(t[rois, end]) for t in tausols]
-    atr_end = [mean(t[rois, end]) for t in atrsols]
-    scatter!(collect(24:24:360), [atr_end[i + 2] - atr_end[i + 1] for i in 0:14], label="Atr")
-    scatter!(collect(24:24:360), [tau_end[i + 2] - tau_end[i + 1] for i in 0:14], label="Tau")
-    # scatter!(collect(6:6:120), [tau_end[i + 2] - tau_end[i + 1] for i in 0:19])
-    vlines!(sol.t[coloc_t[2]], linestyle=:dash, color=:black, linewidth=2.5)
-    ax.alignmode = Mixed(left = 0, right = 0)
-    axislegend(ax, unique=true, position=:rt,  framevisible=false, fontsize=25, patchsize=(25,25))
-
-
-    # ax_init_3 = Axis3(g[3][1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-    # hidedecorations!(ax_init_3)
-    # hidespines!(ax_init_3)
-    # ax_init_3 = Axis3(g[3][1,3], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-    # hidedecorations!(ax_init_3)
-    # hidespines!(ax_init_3)
-
-    # ax_init_1 = Axis3(g[4][1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-    # hidedecorations!(ax_init_1)
-    # hidespines!(ax_init_1)
-    # ax_init_1 = Axis3(g[4][1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-    # hidedecorations!(ax_init_1)
-    # hidespines!(ax_init_1)
-    linestyles = [:solid, :dash, :dashdot, :dashdotdot, :dot]
-    labels = ["t0 = 0", "t0 = 48","t0 = 120","t0 = 216","Placebo"]
-    solidx = [1, 3, 6, 10, 16]
-    for (_absol, _tausol, _atrsol, _drugsol, ls, label) in zip(absols[solidx], tausols[solidx], atrsols[solidx], drugsols[solidx], reverse(linestyles), labels)
-        absol = vec(mean(_absol[rois,:], dims=1))
-        tausol = vec(mean(_tausol[rois,:], dims=1))
-        atrsol = vec(mean(_atrsol[rois,:], dims=1))
-        drugsol = vec(mean(_drugsol[rois,:], dims=1)) 
-        lines!(ax1, sol.t, vec(absol), linewidth=3, linestyle = (ls), color=get(abcmap, maximum(absol)))
-        lines!(ax2, sol.t, vec(tausol), linewidth=3, linestyle = (ls), color=get(taucmap, maximum(tausol)))
-        lines!(ax3, sol.t, vec(atrsol), linewidth=3, linestyle = (ls), color=get(atrcmap, maximum(atrsol)/0.5))
-        lines!(ax4, sol.t, vec(drugsol), linewidth=3, linestyle = (ls), color=get(taucmap, 0.8) , label = label)
-    end
-    # le = [LineElement(color = :black, linestyle = ls) for ls in reverse(linestyles)]
-    # Le = Legend(g1[5, 1], le, labels, nbanks=5, framevisible=false, tellheight=false)
-    # Le.alignmode = Mixed(bottom=0, top = 0)
-    axislegend(ax4, unique=true, position=:lt,  orientation = :horizontal, framevisible=false, fontsize=5, patchsize=(30,10))
-    gb = f[2,:] = GridLayout()
-    t0s = collect(0:24:360)[solidx]
-    for (t, l) in zip(1:5, ["t0 = $(t0s[1])", "t0 = $(t0s[2])","t0 = $(t0s[3])","t0 = $(t0s[4])","Placebo"])
-        Label(gb[0,1+t], l, tellwidth=false, fontsize=20)
-        nodes = get_node_id.(cortex)
-        ax_init_1 = Axis3(gb[1,1+t], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(0.0,0.0,0.0,0.0))
-        hidedecorations!(ax_init_1)
-        hidespines!(ax_init_1)
-        plot_roi!(nodes, tausols[solidx][t][:,end], taucmap)
-        ax_init_1 = Axis3(gb[2,1+t], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(0.0,0.0,0.0,0.0))
-        hidedecorations!(ax_init_1)
-        hidespines!(ax_init_1)
-        plot_roi!(nodes, tausols[solidx][t][:,end], taucmap)
-    
-        ax_init_2 = Axis3(gb[3,1+t], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(0.0,0.0,0.0,0.0))
-        hidedecorations!(ax_init_2)
-        hidespines!(ax_init_2)
-        plot_roi!(nodes, atrsols[solidx][t][:,end], atrcmap)
-        ax_init_2 = Axis3(gb[4,1+t], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(0.0,0.0,0.0,0.0))
-        hidedecorations!(ax_init_2)
-        hidespines!(ax_init_2)
-        plot_roi!(nodes, atrsols[solidx][t][:,end], atrcmap) 
-    end
-    cb = Colorbar(gb[1:2, 1], limits = (0.0, 1.0), colormap = taucmap, label="Tau",
-    vertical = true, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1))
-    cb = Colorbar(gb[3:4, 1], limits = (0.0, 1.0), colormap = atrcmap, label="Atr.",
-    vertical = true, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1))
-    # Label(gb[1:2, 1], "Tau", rotation = pi/2,  justification = :center, tellheight=false, tellwidth=false)
-    # Label(gb[3:4, 1], "Atr", rotation = pi/2,  justification = :center, tellheight=false, tellwidth=false)
-    # colsize!(gb, 1, 0)
-    # cb.alignmode = Mixed(left = 0)
-
-    colsize!(g, 1, 500)
-    rowsize!(G2, 1, 150)
-    rowsize!(f.layout, 1, 450)
-    colgap!(f.layout, 100) 
-    rowgap!(f.layout, 25)
-
-    Label(g1[1, 1, TopLeft()], "A", fontsize = 26, font = :bold, padding = (-15, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
-    Label(g2[1, 1, TopLeft()], "B", fontsize = 26, font = :bold, padding = (10, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
-    Label(g3[1, 1, TopLeft()], "C", fontsize = 26, font = :bold, padding = (10, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
-    Label(gb[1, 1, TopLeft()], "D", fontsize = 26, font = :bold, padding = (-25, 0, 0, -75), halign = :left, tellheight=false, tellwidth=false)
-    
-    display(f)
-    
-end
-save(projectdir("output/plots/pkpd/atn-pkpd-coloc-2.jpeg"), f)
 
 # scatter(collect(0:6:120), [atr_end[i + 2] - atr_end[i + 1] for i in 0:20])
 

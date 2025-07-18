@@ -217,7 +217,7 @@ _rois = ["entorhinal", "Left-Hippocampus", "Right-Hippocampus", "Left-Amygdala",
 rois = findall(x -> x ∈ _rois, get_label.(cortex))
 
 pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-1x1000.jls"));
-bf_pst = deserialize(projectdir("output/bf-output/bf/pst-samples-scaled-fixed-1x1000.jls"));
+bf_pst = deserialize(projectdir("output/bf-output/bf/pst-samples-scaled2-1x1000.jls"));
 braak_regions = get_braak_regions()
 bs = [findall(x -> get_node_id(x) ∈ br, cortex) for br in braak_regions]
 
@@ -302,7 +302,7 @@ begin
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
         xlims!(ax, 3,8.5)
-        # hist!(vec(Array(bf_pst[:β])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        hist!(vec(Array(bf_pst[:β])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
     
         ax = Axis(g1[2,5], xticks=0.0:0.05:0.1, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
         hidespines!(ax, :l, :t, :r)
@@ -408,6 +408,14 @@ begin
                 CairoMakie.ylims!(ax5, start, stop + border)
                 lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
                 
+                if i == 1
+                        Label(g2[0, 1], "Aβ", tellwidth=false, fontsize=30)
+                        Label(g2[0, 2], "Tau", tellwidth=false, fontsize=30)
+                        Label(g2[0, 3], "Neurodeg.", tellwidth=false, fontsize=30)
+                        Label(g2[0, 4], "Aβ", tellwidth=false, fontsize=30)
+                        Label(g2[0, 5], "Tau", tellwidth=false, fontsize=30)
+                end
+
                 labels = ["Braak 1", "Braak 2/3", "Braak 4", "Braak 5", "Braak 6"]
                 cmap = reverse(Makie.wong_colors()[1:5])
                 for (i, rois) in enumerate(reverse(bs))
@@ -415,8 +423,10 @@ begin
                         abr = round(rsquared(df.mean_ab_sols, df.mean_ab), sigdigits=2)
                         taur = round(rsquared(df.mean_tau_sols, df.mean_tau), sigdigits=2)
                         atrr = round(rsquared(df.mean_atr_sols, df.mean_atr), sigdigits=2)
+                        abdr = round(rsquared(df.mean_ab_sol_diff, df.mean_ab_diff), sigdigits=2)
+                        taudr = round(rsquared(df.mean_tau_sol_diff, df.mean_tau_diff), sigdigits=2)
                         # CairoMakie.scatter!(ax1, df.mean_ab_sols,df.mean_ab, color=(:grey, 0.75), markersize=20 )
-                        CairoMakie.scatter!(ax1, df.mean_ab_sols[rois],df.mean_ab[rois], color=cmap[i], markersize=20 , )
+                        CairoMakie.scatter!(ax1, df.mean_ab_sols[rois],df.mean_ab[rois], color=cmap[i], markersize=20 ,label=labels[i])
                         # CairoMakie.text!(ax4, 1.0, 0., text= L"R^{2} = %$bf_abr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=rsize)
                         
                         # CairoMakie.scatter!(ax2, df.mean_tau_sols, df.mean_tau, color=(:grey, 0.75), markersize=20, label=labels[i])
@@ -434,18 +444,23 @@ begin
                         CairoMakie.scatter!(ax5, df.mean_tau_sol_diff[rois], df.mean_tau_diff[rois], color=cmap[i], markersize=20, label=labels[i])
 
                         # CairoMakie.scatter!(ax4, mean_ab_diff[rois], mean_ab_sol_diff[rois], color=cmap[i], markersize=20 , label=labels[i])
-                        CairoMakie.text!(ax1, 1.0, 0., text= L"R^{2} = %$abr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=30)
+                        CairoMakie.text!(ax1, 0.2, 0.8, text= L"R^{2} = %$abr", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=30)
                         # CairoMakie.scatter!(ax5, mean_tau_diff[rois], mean_tau_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
-                        CairoMakie.text!(ax2, 1.0, 0., text= L"R^{2} = %$taur", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=30)
+                        CairoMakie.text!(ax2, 0.2, 0.8, text= L"R^{2} = %$taur", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=30)
                         # CairoMakie.scatter!(ax6, mean_atr_diff[rois], mean_atr_sol_diff[rois], color=cmap[i], markersize=20, label=labels[i])
-                        CairoMakie.text!(ax3, 1.0, 0., text= L"R^{2} = %$atrr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=30)
+                        CairoMakie.text!(ax3, 0.2, 0.8, text= L"R^{2} = %$atrr", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=30)
+                        CairoMakie.text!(ax4, 0.2, 0.8, text= L"R^{2} = %$abdr", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=30)
+                        CairoMakie.text!(ax5, 0.2, 0.8, text= L"R^{2} = %$taudr", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=30)
+                end
+                if i == 2
+                        Legend(g2[3,:], ax1, framevisible = false, unique=true, labelsize=35, nbanks=5, tellheight=true, tellwidth=false)
                 end
         end     
-        # Legend(f[3,:], ax1, framevisible = false, unique=true, labelsize=35, nbanks=5, tellheight=true, tellwidth=false)
         rowgap!(f.layout, 50)
+        rowsize!(f.layout, 1, 350)
 
         Label(g1[1, 1, TopLeft()], "A", fontsize = 40, font = :bold, padding = (-130, 0, 0, -20), halign = :center, tellheight=false, tellwidth=false)
-        Label(g2[1, 1, TopLeft()], "B", fontsize = 40, font = :bold, padding = (-50, 0, 0, -20), halign = :center, tellheight=false, tellwidth=false)
+        Label(g2[1, 1, TopLeft()], "B", fontsize = 40, font = :bold, padding = (-50, 0, 0, -80), halign = :center, tellheight=false, tellwidth=false)
         f
 end
 save(projectdir("output/plots/inference-results/pst-pstpred-harmonised-scaled-adni-bf.pdf"),f)
