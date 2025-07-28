@@ -15,12 +15,12 @@ using ADTypes: AutoZygote
 using Random
 using SciMLSensitivity
 using Serialization
+using LsqFit
 # --------------------------------------------------------------------------------
 # Script params 
 # --------------------------------------------------------------------------------
 n_samples = parse(Int, ARGS[1])
 n_chains = parse(Int, ARGS[2])
-
 # --------------------------------------------------------------------------------
 # Tracer independent data
 # --------------------------------------------------------------------------------
@@ -155,13 +155,22 @@ fbb_idx = 1:18
 fbp_idx = 19:34
 n = 34
 
+linearmodel(x, p) = part .+ p[1] .* x
+fbb_fitted_model = curve_fit(linearmodel, fbb_ui .- fbb_u0, vi, [1.0])
+println("params = $(fitted_model.param)")
+fbp_fitted_model = curve_fit(linearmodel, fbp_ui .- fbp_u0, vi, [1.0])
+println("params = $(fitted_model.param)")
+
+β = [fbb_fitted_model.param[1] .* ones(18); fbp_fitted_model.param[1] .* ones(16)]
+
 Random.seed!(1234)
 
-m = ensemble_atn_harmonised(fbb_prob, fbb_inits, fbb_ts, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
-                            fbp_prob, fbp_inits, fbp_ts, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
+m = ensemble_atn_harmonised_individual(fbb_prob, fbb_inits, fbb_ts, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
+                                       fbp_prob, fbp_inits, fbp_ts, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
 
 pst = m | (fbb_data = fbb_vec_data, fbb_tau_data = fbb_tau_vec_data, fbb_vol_data = fbb_vol_vec_data,
-          fbp_data = fbp_vec_data, fbp_tau_data = fbp_tau_vec_data, fbp_vol_data = fbp_vol_vec_data,);
+          fbp_data = fbp_vec_data, fbp_tau_data = fbp_tau_vec_data, fbp_vol_data = fbp_vol_vec_data,
+          β = β);
 pst()
 
 Random.seed!(1234)

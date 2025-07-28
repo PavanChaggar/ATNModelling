@@ -290,37 +290,37 @@ This model assumes i.i.d noise pooled across Aβ tracers and a personalised coup
     σ_t  ~ InverseGamma(2,3)
     σ_v  ~ InverseGamma(2,3)
 
-    Am_a ~ LogNormal()
+    Am_a ~ truncated(Normal(0, 1), lower=0)
     As_a ~ truncated(Normal(0, 1), lower=0)
 
-    Pm_t ~ LogNormal()
+    Pm_t ~ truncated(Normal(0, 1), lower=0)
     Ps_t ~ truncated(Normal(0, 1), lower=0)
 
-    Am_t ~ LogNormal()
+    Am_t ~ truncated(Normal(0, 1), lower=0)
     As_t ~ truncated(Normal(0, 1), lower=0)
 
-    Em   ~ LogNormal()
+    Em   ~ truncated(Normal(0, 1), lower=0)
     Es   ~ truncated(Normal(0, 1), lower=0)
 
-    Bm   ~ truncated(Normal(3.5, 3.0), lower=0.)
-    Bs   ~ truncated(Normal(0, 3), lower=0)
+    # Bm   ~ truncated(Normal(3.5, 3.0), lower=0.)
+    # Bs   ~ truncated(Normal(0, 3), lower=0)
 
     α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
     α_t  ~ filldist(truncated(Normal(Am_t, As_t), lower=0), n)
-    β    ~ filldist(truncated(Normal(Bm, Bs), lower=0), n)
+    β    ~ filldist(truncated(Normal(3.5, 1.0), lower=0), n)
     η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
 
     fbb_ensemble_prob = EnsembleProblem(fbb_prob, 
-                                        prob_func=make_atn_individial_prob_func(fbb_inits, α_a[fbb_idx], ρ_t[fbb_idx], α_t[fbb_idx], β[fbb_idx], η[fbb_idx], fbb_times), 
-                                        output_func=atn_output_func)
+                                        prob_func=_make_atn_individial_prob_func(fbb_inits, α_a[fbb_idx], ρ_t[fbb_idx], α_t[fbb_idx], β[fbb_idx], η[fbb_idx], fbb_times), 
+                                        output_func=_atn_output_func)
 
     fbb_esol = solve(fbb_ensemble_prob, Tsit5(), verbose=false, abstol = 1e-6, reltol = 1e-6, trajectories=fbb_n)
 
 
     fbp_ensemble_prob = EnsembleProblem(fbp_prob, 
-                                        prob_func=make_atn_individial_prob_func(fbp_inits, α_a[fbp_idx], ρ_t[fbp_idx], α_t[fbp_idx], β[fbp_idx], η[fbp_idx], fbp_times), 
-                                        output_func=atn_output_func)
+                                        prob_func=_make_atn_individial_prob_func(fbp_inits, α_a[fbp_idx], ρ_t[fbp_idx], α_t[fbp_idx], β[fbp_idx], η[fbp_idx], fbp_times), 
+                                        output_func=_atn_output_func)
 
     fbp_esol = solve(fbp_ensemble_prob, Tsit5(), verbose=false, abstol = 1e-6, reltol = 1e-6, trajectories=fbp_n)
 

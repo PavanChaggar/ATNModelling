@@ -366,7 +366,6 @@ function vectorise(d::Vector{Matrix{Float64}})
 end
 
 function make_dkt_name(names)
-    println(names)
     words = split(names, "_")
     if words[end-1] == "rh" || words[end-1] == "Right"
         hem = "right"
@@ -395,9 +394,6 @@ function make_ucsf_name(ucsf_dictionary_df, region_names; include_icv = true)
     
         for _df in eachrow(roi_df)
             push!(fldnames, _df.FLDNAME)
-            println(_df.FLDNAME)
-            println(_df.TEXT)
-            println(prod(split(_df.TEXT)[1:2]))
             push!(labels, prod(split(_df.TEXT)[1:2]) * "_" * dict[roi])
         end
     end
