@@ -10,14 +10,14 @@ using Connectomes: connectome_path, Parcellation, get_label
 # AB status
 # ------------------------------------------------------------------------------------------
 
-_taudata = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024.csv"), DataFrame) 
+_taudata = CSV.read(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025.csv"), DataFrame) 
 taudata = filter(x -> x.TRACER == "FTP" && x.qc_flag==2, _taudata)
-_abdata =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
+_abdata =  CSV.read(datadir("ADNI/2025/UCBERKELEY_AMY_6MM_28Jul2025.csv"), DataFrame)
 abdata = filter(x -> x.qc_flag==2, _abdata)
 
 tau_data_ab_status = set_ab_status(abdata, taudata) 
 
-CSV.write(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-AB-Status.csv"), tau_data_ab_status)
+CSV.write(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025-AB-Status.csv"), tau_data_ab_status)
 
 # ------------------------------------------------------------------------------------------
 # Tau status
@@ -38,4 +38,4 @@ neo_cutoff = 1.395 # Neocortical cutoff
 
 tau_status = set_tau_status(tau_data_ab_status, df_names, mtl, neo, mtl_cutoff, neo_cutoff)
 
-CSV.write(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), tau_status) 
+CSV.write(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025-Ab-tau-Status.csv"), tau_status) 

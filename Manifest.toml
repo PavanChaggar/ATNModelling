@@ -2,13 +2,13 @@
 
 julia_version = "1.11.1"
 manifest_format = "2.0"
-project_hash = "9dc8795c91cbb92ecb82ee58fcf3c65771f71ea4"
+project_hash = "de2524a2156c05c0b631879f42dc62aa2dae7aef"
 
 [[deps.ADNIDatasets]]
 deps = ["CSV", "DataFrames", "Dates", "Setfield"]
-git-tree-sha1 = "10e717c16790752aa98ee56ac6ebc7e917fe2e9c"
-repo-rev = "converters"
-repo-url = "https://github.com/PavanChaggar/ADNIDatasets.jl.git"
+git-tree-sha1 = "9795917686c78664b20d9be647dc858adf907536"
+repo-rev = "main"
+repo-url = "https://github.com/PavanChaggar/ADNIDatasets.jl"
 uuid = "3276ce4d-5fec-4d11-86fe-35d359dbefae"
 version = "0.1.0"
 weakdeps = ["ColorSchemes", "Colors", "Connectomes", "Makie"]

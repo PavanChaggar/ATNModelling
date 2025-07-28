@@ -40,6 +40,7 @@ save(projectdir("output/plots/population-analysis/ab-integrated-$(tracer).pdf"),
 # Regional Values
 #-----------------------------------------------------------------------
 data_path = datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv");
+data_path = datadir("ADNI/2025/UCBERKELEY_AMY_6MM_28Jul2025.csv");
 
 data_df = CSV.read(data_path, DataFrame);
 fbp_data = filter(x -> x.TRACER == tracer, data_df);
@@ -90,6 +91,7 @@ right_nodes = get_node_id.(right_cortical_nodes)
 left_nodes = get_node_id.(left_cortical_nodes)
 ui = dfparams.ui
 d = (ui .- minimum(ui)) ./ (maximum(ui) .- minimum(ui))
+
 begin
     f = Figure(size = (500, 300))
     ax = Axis3(f[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
@@ -117,7 +119,7 @@ begin
     ticksize=18, ticklabelsize=20, ticks=0.8:0.1:1.4, labelpadding=3)
     
 end
-save(projectdir("output/plots/population-analysis/ab-carrying-capacities-$(tracer).jpeg"), f)
+save(projectdir("output/plots/population-analysis/ab-carrying-capacities-$(tracer)-2025.jpeg"), f)
 
 #-----------------------------------------------------------------------
 # Tau correspondance

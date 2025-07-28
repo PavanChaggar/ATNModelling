@@ -7,8 +7,9 @@ using CSV, DataFrames
 using DelimitedFiles: writedlm
 using Connectomes: get_lobe
 
-taudata = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame);
+taudata = CSV.read(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025-Ab-tau-Status.csv"), DataFrame);
 taudata
+allequal(taudata.TRACER)
 abneg_tau = filter(x -> x.AB_Status == 0, taudata)
 
 cortex = get_parcellation() |> get_cortex

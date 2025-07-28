@@ -2,7 +2,7 @@ using ATNModelling.SimulationUtils: make_prob, make_atn_model,
                                     simulate, resimulate, simulate_amyloid,
                                     load_ab_params, load_tau_params, conc
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names
-using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
+using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise, make_ucsf_df,rename_ucsf_df, add_icv, make_ucsf_name, make_dkt_name
 using ATNModelling.InferenceModels: fit_model, ensemble_atn_harmonised, ensemble_atn_harmonised_individual
 
 using Connectomes: laplacian_matrix, get_label
@@ -15,7 +15,6 @@ using ADTypes: AutoZygote
 using Random
 using SciMLSensitivity
 using Serialization
-using AdvancedHMC
 # --------------------------------------------------------------------------------
 # Script params 
 # --------------------------------------------------------------------------------
@@ -31,12 +30,22 @@ L = laplacian_matrix(c)
 dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 
 # Amyloid data 
-_ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
-_tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
+_ab_data_df =  CSV.read(datadir("ADNI/2025/UCBERKELEY_AMY_6MM_28Jul2025.csv"), DataFrame)
+_tau_data_df = CSV.read(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025-Ab-tau-Status.csv"), DataFrame) 
 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
 tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, tau_data_df);
 tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
+
+ucsf_df = CSV.read(datadir("ADNI/2025/adni-ucsf-crosssec-mri.csv"), DataFrame)
+data_dict_df = CSV.read(datadir("ADNI/adni-data-dictionary.csv"), DataFrame)
+ucsf_data_dict = filter(x -> x.CRFNAME == "Cross-Sectional FreeSurfer (7.x)", data_dict_df)
+atr_df = make_ucsf_df(ucsf_df, ucsf_data_dict, dktnames)
+filter!(x -> x.OVERALLQC != "Fail", atr_df)
+tau_atr_df = add_icv(tau_pos_df, atr_df; dt_threshold=180)
+tau_icv_df = filter(x -> x.Has_ICV, tau_atr_df)
+
+tau_data = ADNIDataset(tau_icv_df, dktnames; min_scans=3)
 # --------------------------------------------------------------------------------
 # Load fbb data
 # --------------------------------------------------------------------------------
@@ -67,7 +76,9 @@ normalise!(fbb_tau_suvr, v0)
 fbb_tau_inits = [d[:,1] for d in fbb_tau_suvr]
 
 fbb_tau_pos_vol = get_vol.(fbb_tau)
-fbb_total_vol_norm = [tp ./ sum(tp, dims=1) for tp in fbb_tau_pos_vol]
+fbb_tau_pos_icv = [filter(x -> x.RID == rid, tau_icv_df).ICV for rid in get_id.(fbb_tau)]
+allequal(length.(fbb_tau_pos_icv) .== size.(calc_suvr.(fbb_tau), 2))
+fbb_total_vol_norm = [ v ./ t' for (v, t) in zip(fbb_tau_pos_vol, fbb_tau_pos_icv)]
 fbb_vols = [clamp.(1 .- (vol ./ vol[:,1]), 0, 1) for vol in fbb_total_vol_norm]
 fbb_vol_inits = [vol[:,1] for vol in fbb_vols]
 
@@ -86,6 +97,8 @@ fbp_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer, _ab_data_df);
 fbp_data = ADNIDataset(fbp_data_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF")
 
 fbp, fbp_tau = align_data(fbp_data, tau_data; min_tau_scans=3)
+
+@assert allequal([x ∉ get_id.(fbp_tau) for x in get_id.(fbb_tau)])
 
 fbp_times = get_times.(fbp)
 fbp_tau_times = get_times.(fbp_tau)
@@ -107,7 +120,9 @@ normalise!(fbp_tau_suvr, v0, vi)
 fbp_tau_inits = [d[:,1] for d in fbp_tau_suvr]
 
 fbp_tau_pos_vol = get_vol.(fbp_tau)
-fbp_total_vol_norm = [tp ./ sum(tp, dims=1) for tp in fbp_tau_pos_vol]
+fbp_tau_pos_icv = [filter(x -> x.RID == rid, tau_icv_df).ICV for rid in get_id.(fbp_tau)]
+allequal(length.(fbp_tau_pos_icv) .== size.(calc_suvr.(fbp_tau), 2))
+fbp_total_vol_norm = [ v ./ t' for (v, t) in zip(fbp_tau_pos_vol, fbp_tau_pos_icv)]
 fbp_vols = [clamp.(1 .- (vol ./ vol[:,1]), 0, 1) for vol in fbp_total_vol_norm]
 fbp_vol_inits = [vol[:,1] for vol in fbp_vols]
 
@@ -136,9 +151,9 @@ fbp_vol_vec_data = vectorise(fbp_vols)
 # @assert allequal(0 .<= fbp_tau_vec_data .<= 1)
 # @assert allequal(0 .<= fbp_vol_vec_data .<= 1)
 
-fbb_idx = 1:22
-fbp_idx = 23:44
-n = 44
+fbb_idx = 1:18
+fbp_idx = 19:34
+n = 34
 
 Random.seed!(1234)
 
