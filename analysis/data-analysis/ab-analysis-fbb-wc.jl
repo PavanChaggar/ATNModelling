@@ -14,28 +14,28 @@ data_df = CSV.read(data_path, DataFrame)
 
 tracer = "FBB"
 fbb_data = filter(x -> x.TRACER == tracer, data_df)
-dropmissing!(fbb_data, :AMYLOID_STATUS_COMPOSITE_REF)
+dropmissing!(fbb_data, :AMYLOID_STATUS)
 
-abpos_df = filter(x -> x["AMYLOID_STATUS_COMPOSITE_REF"] ∈ [0, 1], fbb_data)
+abpos_df = filter(x -> x["AMYLOID_STATUS"] ∈ [0, 1], fbb_data)
 
 dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 push!(dktnames, "SUMMARY")
 
-data = ADNIDataset(abpos_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF", qc=false)
+data = ADNIDataset(abpos_df, dktnames; min_scans=2, reference_region="WHOLECEREBELLUM", qc=true)
 
 ab_vf = baseline_difference(data, 73)
 
-CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-vector-field.csv"), ab_vf)
+CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/FBB-WC/ab-vector-field.csv"), ab_vf)
 
-start = 0.7
+start = 0.95
 step  = 0.05
-stop  = 1.1
+stop  = 1.7
 
 bin_df = split_data(ab_vf.ab_suvr, ab_vf.ab_diff, start, step, stop)
-CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-binned-vector-field.csv"), bin_df)
+CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/FBB-WC/ab-binned-vector-field.csv"), bin_df)
 
 f, rts = fit_second_order_polynomial(bin_df.ab_bin, bin_df.ab_bin_diffs)
-writedlm(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-polynomial-coeffs.csv"), coeffs(f))
+writedlm(projectdir("output/analysis-derivatives/ab-derivatives/FBB-WC/ab-polynomial-coeffs.csv"), coeffs(f))
 # f = 0.16844315367056056 + 0.4146967939561749*x - 0.2330383236437777*x^2 
 # roots = [0.627346338525677, 1.1521755335509531]
 
@@ -47,19 +47,18 @@ writedlm(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-polyn
 # xt(t) = (558.976 + 1.22711 * exp(0.1665152871392 * t))/(833.877 + exp(0.1665152871392 * t))
 # xt(t, p) = (558.976 + 1.22711 * exp(0.1665152871392 * t))/(833.877 + exp(0.1665152871392 * t)) - p
 
-xt(t) = (201.542 + 1.2046 * exp(0.1632817611432 * t))/(302.059 + exp(0.1632817611432 * t)) # FBB 2025
-xt(t, p) = (201.542 + 1.2046 * exp(0.1632817611432 * t))/(302.059 + exp(0.1632817611432 * t)) - p # FBB 2025
+# xt(t) = (201.542 + 1.2046 * exp(0.1632817611432 * t))/(302.059 + exp(0.1632817611432 * t)) # FBB 2025
+# xt(t, p) = (201.542 + 1.2046 * exp(0.1632817611432 * t))/(302.059 + exp(0.1632817611432 * t)) - p # FBB 2025
 
-# xt(t) = (259.359 + 1.1397 * exp(0.137327756518 * t))/(399.152 + exp(0.137327756518 * t)) # FBP 2025
-# xt(t, p) = (259.359 + 1.1397 * exp(0.137327756518 * t))/(399.152 + exp(0.137327756518 * t)) - p # FBP 2025
+xt(t) = (145.771 + 1.85265 * exp(0.1467340353347 * t))/(156.886 + exp(0.1467340353347 * t)) # FBP 2025
+xt(t, p) =  (145.771 + 1.85265 * exp(0.1467340353347 * t))/(156.886 + exp(0.1467340353347 * t)) - p  # FBP 2025
 
 t_df = find_amyloid_time(xt, data)
-CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-times.csv"), t_df)
+CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/FBB-WC/ab-times.csv"), t_df)
 
-t_df = CSV.read(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-times.csv"), DataFrame)
+t_df = CSV.read(projectdir("output/analysis-derivatives/ab-derivatives/FBB-WC/ab-times.csv"), DataFrame)
 
 params = find_regional_params(data, t_df);
-
 
 u0 = [params[i].param[4] for i in 1:72]
 diffs = [params[i].param[1] for i in 1:72]
@@ -69,4 +68,4 @@ t50 =  [params[i].param[3] for i in 1:72]
 
 dfparams = DataFrame(u0 = u0, alpha = α, t50 = t50, ui = ui, diff = diffs)
 
-CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-params.csv"), dfparams)
+CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/FBB-WC/ab-params.csv"), dfparams)
