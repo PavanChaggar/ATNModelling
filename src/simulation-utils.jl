@@ -8,7 +8,7 @@ using DataFrames: DataFrame
 using DrWatson: projectdir, datadir
 using DelimitedFiles: readdlm
 using Connectomes: Parcellation, get_label, get_node_id, get_hemisphere, get_lobe
-using Turing: mean
+using Turing: mean, Chains
 """
     load_ab_params()
 
@@ -74,18 +74,22 @@ Returns an `ODEFunction` correpsonding to the scaled ATN model with
 fixed parameters ``ui`, `part` and graph Laplacian `L`.
 """
 function make_scaled_atn_model(ui, part, L)
+    n = length(ui)
     function atn(D, x, p, t;)
-        u = @view x[1:72]
-        v = @view x[73:144]
-        a = @view x[145:216]
+        u = @view x[1:n]
+        v = @view x[n+1:2n]
+        a = @view x[2n+1:3n]
 
         α_a, ρ_t, α_t, β, η = p
          
-        vi = part .+ (β .* u) #.* ( 1 .- a )
-        D[1:72] .= α_a .* ui .* u .* (1 .- u) 
-        D[73:144] .= -ρ_t * L * v .+ α_t .* vi .* v .* (1 .- v)
-        D[145:216] .= η .* v .* ( 1 .- a )
-        return nothing
+        Δ  = (part .+ (β .* ui)) 
+        δ = (part .+ (β .* u .* ui))
+        # vi = part .+ (β .* u) #.* ( 1 .- a )
+        D[1:n] .= α_a .* ui .* u .* (1 .- u)
+        D[n+1:2n] .= -ρ_t * L * v .+ α_t .* Δ .* v .* ((δ./Δ) .- v)
+        D[2n+1:3n] .= η .* v .* ( 1 .- a )
+
+        # return nothing
     end
     return ODEFunction(atn)
 end
@@ -104,9 +108,11 @@ function make_scaled_atn_model_hemisphere(ui, part, L)
 
         α_a, ρ_t, α_t, β, η = p
          
-        vi = part .+ (β .* u) #.* ( 1 .- a )
-        D[1:36] .= α_a .* ui .* u .* (1 .- u) 
-        D[37:72] .= -ρ_t * L * v .+ α_t .* vi .* v .* (1 .- v)
+        vi_max = (part .+ (β .* ui)) 
+        vi = (part .+ (β .* u .* ui))
+        # vi = part .+ (β .* u) #.* ( 1 .- a )
+        D[1:36] .= α_a .* ui .* u .* (1 .- u)
+        D[37:72] .= -ρ_t * L * v .+ α_t .* vi .* v .* ((vi./vi_max) .- v)
         D[73:108] .= η .* v .* ( 1 .- a )
         return nothing
     end
@@ -120,20 +126,31 @@ Returns an `ODEFunction` correpsonding to the scaled ATN model on a single hemis
 This model has fixed parameters ``ui`, `part` and graph Laplacian `L` and distance graph Laplacian `Ld`. `m` is 
 a mask of regions in which drug enters the brain and `t0` is the initial dosing time.
 """
+# function heaviside(t)
+#    0.5 * (sign(t) + 1)
+# end
+function heaviside(t)
+   t > 0 ? 1 : 0
+end
 function make_scaled_atn_pkpd_model(ui, part, L, Ld, m, t0=0)
     function atn_pkpd(D, x, p, t)
         u = @view x[1:36]
         v = @view x[37:72]
         a = @view x[73:108]
-        d = @view x[109:end]
+        d = @view x[109:144]
+        q = @view x[145:end]
         
         α_a, ρ_t, α_t, β, η, ρ_d, α_d, α_c, λ_d = p
          
-        vi = part .+ (β .* u) #.* ( 1 .- a )
+        Δ  = (part .+ (β .* ui)) 
+        δ = (part .+ (β .* q .* ui))
+
+        f = α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
         D[1:36] .= α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
-        D[37:72] .= -ρ_t * L * v .+ α_t .* vi .* v .* (1 .- v)
+        D[37:72] .= -ρ_t * L * v .+ α_t .* Δ .* v .* ((δ./Δ) .- v)
         D[73:108] .= η .* v .* ( 1 .- a )
-        D[109:end] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
+        D[109:144] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
+        D[145:end] .= heaviside.(f) .* (α_a .* ui .* q .* (1 .- q) .- α_d .* d .* q)
     end
     return ODEFunction(atn_pkpd)
 end
@@ -158,6 +175,69 @@ function make_atn_model(u0, ui, v0, part, L)
         D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
         D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
         D[145:216] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
+        #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
+        return nothing
+    end
+    return ODEFunction(atn)
+end
+
+
+# """
+#    make_atn_model(u0, ui, v0, part, L)
+
+# Returns an `ODEFunction` correpsonding to the ATN model with 
+# fixed parameters `u0`, `ui`, `v0`, `part` and graph Laplacian `L`.
+# """
+# function make_atn_pkpd_model(u0, ui, v0, part, L,  Ld, m, t0=0)
+#     function atn(D, x, p, t;)
+#        u = @view x[1:36]
+#         v = @view x[37:72]
+#         a = @view x[73:108]
+#         d = @view x[109:144]
+        
+#         α_a, ρ_t, α_t, β, η, ρ_d, α_d, α_c, λ_d = p
+
+#         _ui = (ui .- u0) #.* (1 .- a)
+#         _vi = (part .+ (β .* (u .- u0))) #.* ( 1 .- a )
+#         p = _vi .- v
+#         vi = (heaviside.(-1 .* p) .* v) + (heaviside.(p) .* _vi) #.* ( 1 .- a )
+#         _vi_max = (part .+ (β .* (ui .- u0)))
+#         D[1:36] .= α_a .* (u .- u0) .* (_ui .- (u .- u0)) .- α_d .* d .* (u .- u0)
+#         D[37:72] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* ((vi .- v0) - (v .- v0))
+#         D[73:108] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
+#         D[109:144] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
+#         # D[145:end] .=  heaviside.(D[1:36]) .* (α_a .* (q .- u0) .* (_ui .- (q .- u0)))
+#         #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
+#         return nothing
+#     end
+#     return ODEFunction(atn)
+# end
+
+
+"""
+   make_atn_model(u0, ui, v0, part, L)
+
+Returns an `ODEFunction` correpsonding to the ATN model with 
+fixed parameters `u0`, `ui`, `v0`, `part` and graph Laplacian `L`.
+"""
+function make_atn_pkpd_model(u0, ui, v0, part, L,  Ld, m, t0=0)
+    function atn(D, x, p, t;)
+        u = @view x[1:36]
+        v = @view x[37:72]
+        a = @view x[73:108]
+        d = @view x[109:144]
+        q = @view x[145:end]
+        
+        α_a, ρ_t, α_t, β, η, ρ_d, α_d, α_c, λ_d = p
+
+        _ui = (ui .- u0) #.* (1 .- a)
+        _vi = ((part .+ (β .* (q .- u0))) .- v0) #.* ( 1 .- a )
+        _vi_max = (part .+ (β .* (ui .- u0)))
+        D[1:36] .= α_a .* (u .- u0) .* (_ui .- (u .- u0)) .- α_d .* d .* (u .- u0)
+        D[37:72] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
+        D[73:108] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
+        D[109:144] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
+        D[145:end] .=  heaviside.(D[1:36]) .* (α_a .* (q .- u0) .* (_ui .- (q .- u0)))
         #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
         return nothing
     end
@@ -330,11 +410,52 @@ Returns a `DataFrame` containing the ordered list of regions in `parc` according
 The colocalisation order is determined by simulating a solution to `model` using posterior parameters from `pst` and initial conditions `inits`, 
 with a given `tau_threshold` and `ab_threshold`.
 """
-function calculate_colocalisation_order(parc::Parcellation, pst, model, inits, tau_threshold, ab_threshold)
-    nodes = length(parc)
-    
+
+function calculate_colocalisation_order(parc::Parcellation, pst::Chains, model, inits, tau_threshold, ab_threshold)
     meanpst = mean(pst)
     params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], meanpst[:β, :mean], meanpst[:Em, :mean]
+
+    _calculate_colocalisation_order(parc::Parcellation, params, model, inits, tau_threshold, ab_threshold)
+end
+
+function calculate_colocalisation_order(parc::Parcellation, pst::Chains, beta::Float64, model, inits, tau_threshold, ab_threshold)
+    meanpst = mean(pst)
+    params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], beta, meanpst[:Em, :mean]
+
+    _calculate_colocalisation_order(parc::Parcellation, params, model, inits, tau_threshold, ab_threshold)
+end
+
+function _calculate_colocalisation_order(parc::Parcellation, params, model, inits, tau_threshold::Vector{Float64}, ab_threshold::Vector{Float64})
+    nodes = length(parc)
+
+    sol = simulate(model, inits, (0, 200), params, saveat=0.01)
+
+    asol = Array(sol)
+    ab_sol = asol[1:nodes,:]
+    tau_sol = asol[collect(1:nodes) .+ nodes,:]
+
+    tau_seed_idx = tau_sol .>= tau_threshold
+    ab_seed_idx = ab_sol .>= ab_threshold
+
+    ab_tau_coloc = tau_seed_idx .* ab_seed_idx
+
+    ab_tau_coloc_time = Vector{Float64}()
+    for i in eachrow(ab_tau_coloc)
+        push!(ab_tau_coloc_time, sol.t[findfirst(x -> x == 1, i)])
+    end
+
+    df = DataFrame(RegionID = collect(1:nodes), 
+                   DKTID = get_node_id.(parc), 
+                   Region = get_label.(parc), 
+                   Hemisphere = get_hemisphere.(parc),
+                   Coloc_time = ab_tau_coloc_time)
+    sorted_df = sort(df, :Coloc_time)
+    sorted_df.Order = 1:nodes
+    return sorted_df
+end
+
+function _calculate_colocalisation_order(parc::Parcellation, params, model, inits, tau_threshold, ab_threshold)
+    nodes = length(parc)
 
     sol = simulate(model, inits, (0, 200), params, saveat=0.01)
 
@@ -399,6 +520,28 @@ function find_seed(parc, sols, tau_threshold, ab_threshold)
     end
     return seeds
 end
+function find_seed(parc, sols, tau_threshold::Vector{Float64}, ab_threshold::Vector{Float64})
+
+    nodes = length(parc)
+    seeds = Vector{Vector{Int64}}()
+    for sol in sols
+        asol = Array(sol)
+        ab_sol = asol[1:nodes,:]
+        tau_sol = asol[collect(1:nodes) .+ nodes,:]
+
+         tau_seed_idx = tau_sol .>= tau_threshold
+        ab_seed_idx = ab_sol .>= ab_threshold
+
+        ab_tau_coloc = tau_seed_idx .* ab_seed_idx
+        init_idx = findfirst(x -> x > 0, sum(ab_tau_coloc, dims=1))
+        if init_idx isa Nothing
+            continue
+        end
+        push!(seeds, findall(x -> x == 1, ab_tau_coloc[:,init_idx[2]]))
+    end
+    return seeds
+end
+
 
 """
     calculate_colocalisation_prob(parc, pst, model, inits, tau_prob, ab_prob)
@@ -429,4 +572,26 @@ function calculate_colocalisation_prob(parc, pst, model, inits, tau_threshold, a
     return sort(df, :Seed_prob)
 end
 
+function calculate_colocalisation_prob(parc, pst, beta, model, inits, tau_threshold, ab_threshold)
+    sols = [simulate(model, inits, (0, 200), params, saveat=0.1) 
+                    for params in zip( vec(pst[:Am_a]), vec(pst[:Pm_t]), vec(pst[:Am_t]), fill(beta, size(pst,1)), vec(pst[:Em]))];
+
+    seed_idx = reduce(vcat, find_seed(parc, sols, tau_threshold, ab_threshold))
+
+    nodes = length(parc)
+    seed_count = zeros(nodes)
+    seed_count[unique(seed_idx)] .= [count(==(i), seed_idx) for i in unique(seed_idx)]
+    seed_prob = seed_count ./ length(seed_idx)
+    init_seed_idx = findall(x -> x > 0, seed_prob)
+
+    seed_prob[init_seed_idx]
+
+   df =  DataFrame(DKTID = get_node_id.(parc), 
+                   Seed = get_label.(parc), 
+                   Hemisphere = get_hemisphere.(parc), 
+                   Seed_prob = seed_prob, 
+                   lobe=get_lobe.(parc))
+    
+    return sort(df, :Seed_prob)
+end
 end

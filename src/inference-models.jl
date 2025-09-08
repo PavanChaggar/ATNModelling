@@ -168,7 +168,8 @@ This model assumes i.i.d noise for pooled across Aβ tracers and a pooled coupli
     Em   ~ truncated(Normal(0, 3), lower=0)    # LogNormal()
     Es   ~ truncated(Normal(0, 3), lower=0)
     
-    β    ~ truncated(Normal(3.5, 3.0), lower=0.)
+    b1    ~ truncated(Normal(3.5, 1.0), lower=0.)
+    b2    ~ truncated(Normal(3.5, 1.0), lower=0.)
     
     α_a  ~ filldist(truncated(Normal(Am_a, As_a), lower=0), n)
     ρ_t  ~ filldist(truncated(Normal(Pm_t, Ps_t), lower=0), n)
@@ -176,19 +177,19 @@ This model assumes i.i.d noise for pooled across Aβ tracers and a pooled coupli
     η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
 
     fbb_ensemble_prob = EnsembleProblem(fbb_prob, 
-                                    prob_func=_make_atn_prob_func(fbb_inits, α_a[fbb_idx], ρ_t[fbb_idx], α_t[fbb_idx], β, η[fbb_idx], fbb_times), 
+                                    prob_func=_make_atn_prob_func(fbb_inits, α_a[fbb_idx], ρ_t[fbb_idx], α_t[fbb_idx], b1, η[fbb_idx], fbb_times), 
                                     output_func=_atn_output_func)
     
-    fbb_esol = solve(fbb_ensemble_prob, Tsit5(), verbose=false, abstol = 1e-6, reltol = 1e-6, trajectories=fbb_n)
+    fbb_esol = solve(fbb_ensemble_prob, Tsit5(), verbose=true, abstol = 1e-6, reltol = 1e-6, trajectories=fbb_n)
 
 
     fbp_ensemble_prob = EnsembleProblem(fbp_prob, 
-                                    prob_func=_make_atn_prob_func(fbp_inits, α_a[fbp_idx], ρ_t[fbp_idx], α_t[fbp_idx], β, η[fbp_idx], fbp_times), 
+                                    prob_func=_make_atn_prob_func(fbp_inits, α_a[fbp_idx], ρ_t[fbp_idx], α_t[fbp_idx], b2 , η[fbp_idx], fbp_times), 
                                     output_func=_atn_output_func)
     
-    fbp_esol = solve(fbp_ensemble_prob, Tsit5(), verbose=false, abstol = 1e-6, reltol = 1e-6, trajectories=fbp_n)
+    fbp_esol = solve(fbp_ensemble_prob, Tsit5(), verbose=true, abstol = 1e-6, reltol = 1e-6, trajectories=fbp_n)
 
-    if !success_condition(get_retcodes(fbb_esol)) && !success_condition(get_retcodes(fbp_esol))
+    if !success_condition(get_retcodes(fbb_esol)) || !success_condition(get_retcodes(fbp_esol))
         Turing.@addlogprob! -Inf
         println("failed")
         return nothing
@@ -201,7 +202,7 @@ This model assumes i.i.d noise for pooled across Aβ tracers and a pooled coupli
     fbb_data ~ MvNormal(fbb_preds, σ_a^2 * I)
     fbb_tau_data ~ MvNormal(fbb_tau_preds, σ_t^2 * I)
     fbb_vol_data ~ MvNormal(fbb_vol_preds, σ_v^2 * I) 
-
+ 
     fbp_data ~ MvNormal(fbp_preds, σ_a^2 * I)
     fbp_tau_data ~ MvNormal(fbp_tau_preds, σ_t^2 * I)
     fbp_vol_data ~ MvNormal(fbp_vol_preds, σ_v^2 * I) 
@@ -276,7 +277,7 @@ end
 
 
 """
-    ensemble_atn_harmonised_tracer(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
+    ensemble_atn_harmonised_individual(fbb_prob, fbb_inits, fbb_times, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
                                    fbp_prob, fbp_inits, fbp_times, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
 
 Hierarhical probabilitstic model for calibrating the ATN with longitudinal neuroimaging data with 
