@@ -72,7 +72,7 @@ Returns a Vector{Vector{Int64}} with each Vector{Int64} corresponding to a set o
 The first Vector{Vector{Int64}} corresponds to the first Braak region and so on. 
 """
 function get_braak_regions()
-    braak_dict = load(datadir("derivatives/braak-dict.jld2"))
+    braak_dict = load(datadir("adni-derivatives/braak-dict.jld2"))
     ks = ["1", "2/3", "4", "5", "6"]
     fs_braak_stages = [braak_dict[k] for k in ks]    
     return map(_getbraak, fs_braak_stages)

@@ -1,9 +1,9 @@
 using ATNModelling.SimulationUtils: make_prob, make_atn_model, 
                                     simulate, resimulate, simulate_amyloid,
-                                    load_ab_params, load_tau_params, make_atn_fixed_model
-using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names
+                                    load_ab_params, load_tau_params
+using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex_parc, get_dkt_names
 using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
-using ATNModelling.InferenceModels: fit_model, ensemble_atn, serial_atn, fit_serial_atn, ensemble_atn_truncated_fixed, ensemble_atn_truncated
+using ATNModelling.InferenceModels: fit_model, ensemble_atn_truncated, serial_atn, fit_serial_atn
 
 using Connectomes: laplacian_matrix, get_label
 using ADNIDatasets: ADNIDataset, get_id, get_dates, get_initial_conditions, calc_suvr, get_vol, get_times
@@ -12,37 +12,33 @@ using CSV, DataFrames
 using SciMLBase: successful_retcode
 using DifferentialEquations, Turing, LinearAlgebra
 using Random
-# --------------------------------------------------------------------------------
-# Script params 
-# --------------------------------------------------------------------------------
-tracer = ARGS[1]
-n_samples = parse(Int, ARGS[2])
-n_chains = parse(Int, ARGS[3])
+include(projectdir("bf-data.jl"))
 # --------------------------------------------------------------------------------
 # Load parameters
 # --------------------------------------------------------------------------------
-u0, ui = load_ab_params(tracer=tracer)
+u0, ui = load_ab_params(tracer="FMM")
 ui_diff = ui .- u0
-v0, vi, part = load_tau_params()
+v0, vi, part = load_tau_params(tracer="RO")
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
 L = laplacian_matrix(c)
 
 # --------------------------------------------------------------------------------
 # Loading data and aligning
 # --------------------------------------------------------------------------------
-dktnames = get_parcellation() |> get_cortex |> get_dkt_names
+dktnames = get_parcellation() |> get_cortex_parc |> get_dkt_names
 
-# Amyloid data 
-_ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
-_tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
+data_path = datadir("bf-data/bf-data-ab-tau-summary.csv");
 
-ab_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer, _ab_data_df);
-ab_data = ADNIDataset(ab_data_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF")
+data_df = CSV.read(data_path, DataFrame)
+
+dktnames = get_parcellation() |> get_cortex_parc |> get_dkt_names
+
+ab_data_df = filter(x -> x.ab_status == 1, data_df)
+ab_data = BFDataset(ab_data_df, dktnames; min_scans=3, tracer=:ab)
 
 # Tau data 
-tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
-tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, tau_data_df);
-tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=3)
+tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, ab_data_df);
+tau_data = BFDataset(tau_pos_df, dktnames; min_scans=3, tracer=:tau)
 
 ab, tau = align_data(ab_data, tau_data)
 
@@ -53,8 +49,8 @@ ts = [sort(unique([a; t])) for (a, t) in zip(ab_times, tau_times)]
 ab_tidx = get_time_idx(ab_times, ts)
 tau_tidx = get_time_idx(tau_times, ts)
 
-@assert allequal([allequal(ab_times[i] .== ts[i][ab_tidx[i]]) for i in 1:22])
-@assert allequal([allequal(tau_times[i] .== ts[i][tau_tidx[i]]) for i in 1:22])
+@assert allequal([allequal(ab_times[i] .== ts[i][ab_tidx[i]]) for i in 1:38])
+@assert allequal([allequal(tau_times[i] .== ts[i][tau_tidx[i]]) for i in 1:38])
 
 ab_suvr = calc_suvr.(ab)
 normalise!(ab_suvr, u0, ui)
@@ -72,8 +68,8 @@ vol_inits = [vol[:,1] for vol in vols]
 atn_model = make_atn_model(u0, ui, v0, part, L)
 prob = make_prob(atn_model, 
           [ab_inits[1]; tau_inits[1]; vol_inits[1]], 
-          (0.0,7.5), [1.0,1.0,1.0,1.0, 3.5,1.0])
-solve(prob, Tsit5())
+          (0.0,7.5), [1.0,1.0,1.0,3.5,1.0])
+
 inits = [[ab; tau; vol] for (ab, tau, vol) in zip(ab_inits, tau_inits, vol_inits)]
 n_subjects = length(ab)
 
@@ -82,30 +78,21 @@ n_subjects = length(ab)
 # ------------------------------------------------------------------
 using LsqFit
 
-linearmodel(x, p) = part .+ p[1] .* x
+linearmodel(x, p) =  part .+ p[1] * x
 fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0])
-println("params = $(fitted_model.param)")
-# using CairoMakie
-# begin
-#     f = Figure(size=(600, 500))
-#     ax = Axis(f[1,1], xlabel="Amyloid", ylabel="Tau")
-#     CairoMakie.ylims!(ax, 0.0, 3.0)
-#     CairoMakie.xlims!(ax, 0.0, 3.0)
-#     CairoMakie.scatter!(fitted_model.param[1] .* (ui .- u0), vi .- part)    
-#     f
-# end
-# save(projectdir("output/plots/population-analysis/tau-vs-amyloid.pdf"),f)
-# linearmodel(x, p) = p[1] .+ p[2] .* x
-# fitted_model = curve_fit(linearmodel, ui .- u0, vi, [1.0, 1.0])
-# println("params = $(fitted_model.param)")
+fitted_model.param
+
+# linearmodel(x, p) = part .+ p[1] .* x
+# fbb_fitted_model = curve_fit(linearmodel, fbb_ui .- fbb_u0, vi, [1.0])
 # using CairoMakie
 # begin
 #     f = Figure(size=(600, 500))
 #     ax = Axis(f[1,1])
-#     CairoMakie.ylims!(ax, 0.0, 5.0)
-#     CairoMakie.xlims!(ax, 0.0, 1.0)
-#     CairoMakie.scatter!((ui .- u0), vi)    
-#     CairoMakie.lines!(0:0.1:1, fitted_model.param[1] .+ 3. .* (0:0.1:1))
+#     ylims!(ax, 0.0, 5.0)
+#     xlims!(ax, 0.0, 5.0)
+#     scatter!(ui .- u0, vi .- part)
+#     lines!(0:0.1:1.5, linearmodel(0:0.1:1.5, fitted_model.param[1]))
+#     # scatter!(part .+ fitted_model.param[1] * (ui .- u0), vi )    
 #     f
 # end
 
@@ -116,14 +103,15 @@ vol_vec_data = vectorise(vols)
 Random.seed!(1234)
 
 m = ensemble_atn_truncated(prob, inits, ts, ab_tidx, tau_tidx, n_subjects)
-pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data,
-           β=fitted_model.param[1],);
+pst = m | (ab_data = ab_vec_data, tau_data = tau_vec_data, vol_data = vol_vec_data);
 pst()
 
+n_samples = 1000
+n_chains = 1
 println("Starting Inference")
-samples = sample(pst, NUTS(0.9), MCMCSerial(), n_samples, n_chains)
+samples = sample(pst, NUTS(0.8), MCMCSerial(), n_samples, n_chains)
 println("Number of Divergences: $(sum(samples[:numerical_error]))")
 display(summarize(samples))
 
 using Serialization
-serialize(projectdir("output/chains/population-atn/pst-samples-fixed-beta-$(tracer)-$(n_chains)x$(n_samples).jls"), samples)
+serialize(projectdir("output/chains/population-atn/pst-samples-bf-random-$(n_chains)x$(n_samples).jls"), samples)

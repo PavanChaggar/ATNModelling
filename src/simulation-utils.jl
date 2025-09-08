@@ -18,7 +18,7 @@ function load_ab_params(;tracer="FBP")
     if tracer == "FBB" || tracer == "FBP"
         ab_params = read(projectdir(joinpath("output/analysis-derivatives/ab-derivatives/", tracer, "ab-params.csv")), DataFrame)
     elseif tracer == "FMM"
-        ab_params = read(projectdir("output/bf-output/ab-derivatives/ab-params.csv"), DataFrame)
+        ab_params = read(projectdir("output/analysis-derivatives/bf/ab-derivatives/ab-params.csv"), DataFrame)
     end
     return ab_params.u0, ab_params.ui
 end
@@ -31,11 +31,11 @@ capacities for tau.
 """
 function load_tau_params(;tracer="FTP")
     if tracer == "FTP"
-        tau_params = read(datadir("derivatives/tau-params.csv"), DataFrame)
+        tau_params = read(datadir("adni-derivatives/tau-params.csv"), DataFrame)
         sympart = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/pypart-sym.csv")) |> vec
     elseif tracer == "RO"
-        tau_params = read(projectdir("output/bf-output/tau-derivatives/tau_params.csv"), DataFrame)
-        sympart = readdlm(projectdir("output/bf-output/tau-derivatives/pypart-sym.csv")) |> vec
+        tau_params = read(datadir("bf-derivatives/tau-params.csv"), DataFrame)
+        sympart = readdlm(projectdir("output/analysis-derivatives/bf/tau-derivatives/pypart-sym.csv")) |> vec
     end
     return tau_params.v0, tau_params.vi, sympart
 end

@@ -17,18 +17,14 @@ using DifferentialEquations, Turing, LinearAlgebra
 using Random
 using StatisticalMeasures
 using Serialization
+using LsqFit
 using CairoMakie; CairoMakie.activate!()
 using Colors, ColorSchemes
+include(projectdir("bf-data.jl"))
 # --------------------------------------------------------------------------------
-# Load parameters
+# Tracer independent data
 # --------------------------------------------------------------------------------
-tracer = "FBB"
-v0, vi, part = load_tau_params()
-c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
-L = laplacian_matrix(c)
-cortex = get_parcellation() |> get_cortex 
-dktnames =  get_dkt_names(cortex)
-v0, vi, part = load_tau_params()
+ftp_v0, ftp_vi, ftp_part = load_tau_params()
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
 L = laplacian_matrix(c) 
 dktnames = get_parcellation() |> get_cortex |> get_dkt_names
@@ -76,7 +72,7 @@ normalise!(fbb_suvr, fbb_u0, fbb_ui)
 fbb_inits = [d[:,1] for d in fbb_suvr]
 
 fbb_tau_suvr = calc_suvr.(fbb_tau)
-normalise!(fbb_tau_suvr, v0)
+normalise!(fbb_tau_suvr, ftp_v0)
 fbb_tau_inits = [d[:,1] for d in fbb_tau_suvr]
 
 fbb_tau_pos_vol = get_vol.(fbb_tau)
@@ -89,7 +85,7 @@ fbb_vol_inits = [vol[:,1] for vol in fbb_vols]
 fbb_inits = [[ab; tau; vol] for (ab, tau, vol) in zip(fbb_inits, fbb_tau_inits, fbb_vol_inits)]
 fbb_n = length(fbb)
 
-fbb_atn_model = make_atn_model(fbb_u0, fbb_ui, v0, part, L)
+fbb_atn_model = make_atn_model(fbb_u0, fbb_ui, ftp_v0, ftp_part, L)
 fbb_prob = make_prob(fbb_atn_model, fbb_inits[1], (0.0,7.5), [1.0,0.1,1.0,3.5,1.0])
 sol = solve(fbb_prob, Tsit5())
 # --------------------------------------------------------------------------------
@@ -120,7 +116,7 @@ normalise!(fbp_suvr, fbp_u0, fbp_ui)
 fbp_inits = [d[:,1] for d in fbp_suvr]
 
 fbp_tau_suvr = calc_suvr.(fbp_tau)
-normalise!(fbp_tau_suvr, v0, vi)
+normalise!(fbp_tau_suvr, ftp_v0)
 fbp_tau_inits = [d[:,1] for d in fbp_tau_suvr]
 
 fbp_tau_pos_vol = get_vol.(fbp_tau)
@@ -133,24 +129,87 @@ fbp_vol_inits = [vol[:,1] for vol in fbp_vols]
 fbp_inits = [[ab; tau; vol] for (ab, tau, vol) in zip(fbp_inits, fbp_tau_inits, fbp_vol_inits)]
 fbp_n = length(fbp)
 
-fbp_atn_model = make_atn_model(fbp_u0, fbp_ui, v0, part, L)
+fbp_atn_model = make_atn_model(fbp_u0, fbp_ui, ftp_v0, ftp_part, L)
 fbp_prob = make_prob(fbp_atn_model, fbp_inits[1], (0.0,7.5), [1.0,0.1,1.0,3.5,1.0])
 sol = solve(fbp_prob, Tsit5())
 
 # --------------------------------------------------------------------------------
+# Load BF data
+# --------------------------------------------------------------------------------
+tracer="FMM"
+bf_u0, bf_ui = load_ab_params(tracer=tracer)
+bf_v0, bf_vi, bf_part = load_tau_params(tracer="RO")
+
+bf_data_path = datadir("bf-data/bf-data-ab-tau-summary.csv");
+bf_data_df = CSV.read(bf_data_path, DataFrame)
+
+bf_ab_data_df = filter(x -> x.ab_status == 1, bf_data_df)
+bf_ab_data = BFDataset(bf_ab_data_df, dktnames; min_scans=3, tracer=:ab)
+
+# Tau data 
+bf_tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, bf_ab_data_df);
+bf_tau_data = BFDataset(bf_tau_pos_df, dktnames; min_scans=3, tracer=:tau)
+
+bf_ab, bf_tau = align_data(bf_ab_data, bf_tau_data)
+
+bf_ab_times = get_times.(bf_ab)
+bf_tau_times = get_times.(bf_tau)
+bf_ts = [sort(unique([a; t])) for (a, t) in zip(bf_ab_times, bf_tau_times)]
+
+bf_ab_tidx = get_time_idx(bf_ab_times, bf_ts)
+bf_tau_tidx = get_time_idx(bf_tau_times, bf_ts)
+
+@assert allequal([allequal(bf_ab_times[i] .== bf_ts[i][bf_ab_tidx[i]]) for i in 1:48])
+@assert allequal([allequal(bf_tau_times[i] .== bf_ts[i][bf_tau_tidx[i]]) for i in 1:48])
+
+bf_ab_suvr = calc_suvr.(bf_ab)
+normalise!(bf_ab_suvr, bf_u0, bf_ui)
+bf_ab_inits = [d[:,1] for d in bf_ab_suvr]
+
+bf_tau_suvr = calc_suvr.(bf_tau)
+normalise!(bf_tau_suvr, bf_v0)
+bf_tau_inits = [d[:,1] for d in bf_tau_suvr]
+
+bf_tau_pos_vol = get_vol.(bf_tau)
+bf_tau_pos_icv = [filter(x -> x.sid == "BF" * string(get_id(tau)) && x.tau_pet_date ∈ get_dates(tau), bf_data_df).icv_mm3 for tau in bf_tau]
+allequal(length.(bf_tau_pos_icv) .== size.(calc_suvr.(bf_tau), 2))
+bf_total_vol_norm = [ v ./ t' for (v, t) in zip(bf_tau_pos_vol, bf_tau_pos_icv)]
+bf_vols = [clamp.(1 .- (vol ./ vol[:,1]), 0, 1) for vol in bf_total_vol_norm]
+bf_vols[1]
+bf_vol_inits = [vol[:,1] for vol in bf_vols]
+
+bf_inits = [[ab; tau; vol] for (ab, tau, vol) in zip(bf_ab_inits, bf_tau_inits, bf_vol_inits)]
+bf_n = length(bf_ab)
+
+bf_atn_model = make_atn_model(bf_u0, bf_ui, bf_v0, bf_part, L)
+bf_prob = make_prob(bf_atn_model, bf_inits[1], (0.0,7.5), [1.0,0.1,1.0,3.5,1.0])
+sol = solve(bf_prob, Tsit5())
+# --------------------------------------------------------------------------------
 # Inference
 # --------------------------------------------------------------------------------
-pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-ind-beta-1x1000.jls"));
-pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
-pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-sepbeta-1x1000.jls"));
-summarize(pst)
-meanpst = mean(pst)
+adni_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-ind-beta-1x1000.jls"));
+bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-suvr-bf-fixed-beta-1x1000.jls"));
+# pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
+# pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-sepbeta-1x1000.jls"));
+
+summarize(adni_pst)
+summarize(bf_pst)
+adni_meanpst = mean(adni_pst)
+bf_meanpst = mean(bf_pst)
 
 # bf_results = CSV.read(projectdir("output/bf-output/bf/averaged_results.csv"), DataFrame)
 
 function get_diff(d)
     d[:,end] .- d[:,1]
 end
+
+linearmodel(x, p) = part .+ p[1] .* x
+fbp_fitted_model = curve_fit(linearmodel, fbp_ui .- fbp_u0, ftp_vi, [1.0])
+println("params = $(fbp_fitted_model.param)")
+
+
+bf_fitted_model = curve_fit(linearmodel, bf_ui .- bf_u0, bf_vi, [1.0])
+println("params = $(bf_fitted_model.param)")
 
 # using GLMakie, Colors, ColorSchemes, Connectomes
 # data_dashboard(tau, v0, vi; show_mtl_threshold=true)
@@ -163,12 +222,12 @@ bs = [findall(x -> get_node_id(x) ∈ br, cortex) for br in braak_regions]
 ab_sols = Vector{Array{Float64}}()
 tau_sols = Vector{Array{Float64}}()
 atr_sols = Vector{Array{Float64}}()
-meanpst = mean(pst)
+adni_meanpst = mean(adni_pst)
 
 for sub in 1:18
-    p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
-    meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β_fbb"), :mean], 
-    meanpst[Symbol("η[$sub]"), :mean]]
+    p = [adni_meanpst[Symbol("α_a[$sub]"), :mean], adni_meanpst[Symbol("ρ_t[$sub]"), :mean], 
+    adni_meanpst[Symbol("α_t[$sub]"), :mean], 3.2258211441306877, 
+    adni_meanpst[Symbol("η[$sub]"), :mean]]
     
     pstprob = remake(fbb_prob, u0=fbb_inits[sub], p=p)
     pstsol = solve(pstprob, Tsit5())
@@ -178,9 +237,9 @@ for sub in 1:18
 end
 
 for (i, sub) in enumerate(19:34)
-    p = [meanpst[Symbol("α_a[$sub]"), :mean], meanpst[Symbol("ρ_t[$sub]"), :mean], 
-    meanpst[Symbol("α_t[$sub]"), :mean], meanpst[Symbol("β_fbp"), :mean], 
-    meanpst[Symbol("η[$sub]"), :mean]]
+    p = [adni_meanpst[Symbol("α_a[$sub]"), :mean], adni_meanpst[Symbol("ρ_t[$sub]"), :mean], 
+    adni_meanpst[Symbol("α_t[$sub]"), :mean], 3.685830432811308, 
+    adni_meanpst[Symbol("η[$sub]"), :mean]]
     
     pstprob = remake(fbp_prob, u0=fbp_inits[i], p=p)
     pstsol = solve(pstprob, Tsit5())
@@ -197,7 +256,6 @@ mean_ab =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_suvr; fbp_suvr]]), dim
 mean_tau =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_tau_suvr; fbp_tau_suvr]]), dims=2))
 mean_atr =  vec(mean(reduce(hcat, [d[:, end] for d in [fbb_vols; fbp_vols]]), dims=2))
 
-    
 mean_ab_sol_diff = vec(mean(reduce(hcat, get_diff.(ab_sols)), dims=2))
 mean_tau_sol_diff = vec(mean(reduce(hcat, get_diff.(tau_sols)), dims=2))
 mean_atr_sol_diff = vec(mean(reduce(hcat, get_diff.(atr_sols)), dims=2))
@@ -221,9 +279,59 @@ adni_results = DataFrame(
         mean_atr_diff = mean_atr_diff
 )
 
+
+bf_ab_sols = Vector{Array{Float64}}()
+bf_tau_sols = Vector{Array{Float64}}()
+bf_atr_sols = Vector{Array{Float64}}()
+bf_meanpst = mean(bf_pst)
+
+for sub in 1:48
+    p = [bf_meanpst[Symbol("α_a[$sub]"), :mean], bf_meanpst[Symbol("ρ_t[$sub]"), :mean], 
+    bf_meanpst[Symbol("α_t[$sub]"), :mean], 2.1588908582495936, 
+    bf_meanpst[Symbol("η[$sub]"), :mean]]
+    
+    pstprob = remake(bf_prob, u0=bf_inits[sub], p=p)
+    pstsol = solve(pstprob, Tsit5())
+    push!(bf_ab_sols,pstsol(bf_ab_times[sub])[1:72,:])
+    push!(bf_tau_sols,pstsol(bf_tau_times[sub])[73:144,:])
+    push!(bf_atr_sols,pstsol(bf_tau_times[sub])[145:216,:])
+end
+
+bf_mean_ab_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in bf_ab_sols]), dims=2))
+bf_mean_tau_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in bf_tau_sols]), dims=2))
+bf_mean_atr_sols =  vec(mean(reduce(hcat, [sol[:, end] for sol in bf_atr_sols]), dims=2))
+
+bf_mean_ab =  vec(mean(reduce(hcat, [d[:, end] for d in bf_ab_suvr]), dims=2))
+bf_mean_tau =  vec(mean(reduce(hcat, [d[:, end] for d in bf_tau_suvr]), dims=2))
+bf_mean_atr =  vec(mean(reduce(hcat, [d[:, end] for d in bf_vols]), dims=2))
+
+bf_mean_ab_sol_diff = vec(mean(reduce(hcat, get_diff.(bf_ab_sols)), dims=2))
+bf_mean_tau_sol_diff = vec(mean(reduce(hcat, get_diff.(bf_tau_sols)), dims=2))
+bf_mean_atr_sol_diff = vec(mean(reduce(hcat, get_diff.(bf_atr_sols)), dims=2))
+
+bf_mean_ab_diff = vec(mean(reduce(hcat, get_diff.(bf_ab_suvr)), dims=2))
+bf_mean_tau_diff = vec(mean(reduce(hcat, get_diff.(bf_tau_suvr)), dims=2))
+bf_mean_atr_diff = vec(mean(reduce(hcat, get_diff.(bf_vols)), dims=2))
+
+
+bf_results = DataFrame(
+        mean_ab_sols = bf_mean_ab_sols, 
+        mean_tau_sols = bf_mean_tau_sols,
+        mean_atr_sols = bf_mean_atr_sols,
+        mean_ab = bf_mean_ab,
+        mean_tau = bf_mean_tau,
+        mean_atr = bf_mean_atr,
+        mean_ab_sol_diff = bf_mean_ab_sol_diff,
+        mean_tau_sol_diff = bf_mean_tau_sol_diff,
+        mean_atr_sol_diff = bf_mean_atr_sol_diff,
+        mean_ab_diff = bf_mean_ab_diff,
+        mean_tau_diff = bf_mean_tau_diff,
+        mean_atr_diff = bf_mean_atr_diff
+)
+
 # CSV.write(projectdir("output/analysis-derivatives/posterior-derivatives/averaged_results_adni.csv"), averaged_results_adni)
-adni_results = CSV.read(projectdir("output/analysis-derivatives/posterior-derivatives/averaged_results_adni.csv"), DataFrame)
-bf_results = CSV.read(projectdir("output/bf-output/bf/averaged_results.csv"), DataFrame)
+# adni_results = CSV.read(projectdir("output/analysis-derivatives/posterior-derivatives/averaged_results_adni.csv"), DataFrame)
+# bf_results = CSV.read(projectdir("output/bf-output/bf/averaged_results.csv"), DataFrame)
 
 # Label(f[0, 1], "Aβ", tellwidth=false, fontsize=35)
 # Label(f[0, 2], "Tau", tellwidth=false, fontsize=35)
@@ -237,8 +345,8 @@ _rois = ["entorhinal", "Left-Hippocampus", "Right-Hippocampus", "Left-Amygdala",
                 "inferiortemporal", "middletemporal", "inferiorparietal", "precuneus"]
 rois = findall(x -> x ∈ _rois, get_label.(cortex))
 
-pst = deserialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-dense-1x1000.jls"));
-bf_pst = deserialize(projectdir("output/bf-output/bf/pst-samples-scaled2-1x1000.jls"));
+pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
+bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-suvr-bf-fixed-beta-1x1000.jls"));
 braak_regions = get_braak_regions()
 bs = [findall(x -> get_node_id(x) ∈ br, cortex) for br in braak_regions]
 
@@ -284,13 +392,13 @@ begin
         hidexdecorations!(ax, grid=false, ticks=false)
     
     
-        ax = Axis(g1[1,4], xticks=3:1:8.5, xticklabelsize=25, titlesize=titlesize, title="β \n Aβ/tau coupling", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
-        hidespines!(ax, :l, :t, :r)
-        hideydecorations!(ax, label=false)
-        xlims!(ax, 3,8.5)
-        hist!(vec(Array(pst[:β_fbb])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
-        hist!(vec(Array(pst[:β_fbp])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
-        hidexdecorations!(ax, grid=false, ticks=false)
+        # ax = Axis(g1[1,4], xticks=3:1:8.5, xticklabelsize=25, titlesize=titlesize, title="β \n Aβ/tau coupling", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
+        # hidespines!(ax, :l, :t, :r)
+        # hideydecorations!(ax, label=false)
+        # xlims!(ax, 3,8.5)
+        # hist!(vec(Array(pst[:β_fbb])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        # hist!(vec(Array(pst[:β_fbp])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        # hidexdecorations!(ax, grid=false, ticks=false)
     
         ax = Axis(g1[1,5], xticks=0.0:0.05:0.1,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="η \n atrophy rate", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
         hidespines!(ax, :l, :t, :r)
@@ -313,18 +421,17 @@ begin
         xlims!(ax, 0.0,0.1)
         hist!(vec(Array(bf_pst[:Pm_t])), bins=15, color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         
-        ax = Axis(g1[2,3],  xticks=0:0.05:0.1, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+        ax = Axis(g1[2,3],  xticks=0:0.05:0.3, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
-        xlims!(ax, 0.0,0.125)
+        xlims!(ax, 0.0,0.325)
         hist!(vec(Array(bf_pst[:Am_t])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         
-    
-        ax = Axis(g1[2,4], xticks=3:1:8.5, xticklabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
-        hidespines!(ax, :l, :t, :r)
-        hideydecorations!(ax, label=false)
-        xlims!(ax, 3,8.5)
-        hist!(vec(Array(bf_pst[:β])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        # ax = Axis(g1[2,4], xticks=3:1:8.5, xticklabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+        # hidespines!(ax, :l, :t, :r)
+        # hideydecorations!(ax, label=false)
+        # xlims!(ax, 3,8.5)
+        # hist!(vec(Array(bf_pst[:β])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
     
         ax = Axis(g1[2,5], xticks=0.0:0.05:0.1, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
         hidespines!(ax, :l, :t, :r)
@@ -394,7 +501,7 @@ begin
                 lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
 
                 start = 0.0
-                stop = 0.1
+                stop = 0.2
                 border = 0.03
                 ax4 =CairoMakie.Axis(g2[i,4],  
                         xlabel="Δ Prediction", 
@@ -412,8 +519,8 @@ begin
                 lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
 
                 start = -0.0
-                stop = 0.3
-                border = 0.03
+                stop = 0.5
+                border = 0.05
                 ax5 =CairoMakie.Axis(g2[i,5],  
                         xlabel="Δ Prediction", 
                         ylabel="Δ Observation", 
@@ -440,13 +547,15 @@ begin
 
                 labels = ["Braak 1", "Braak 2/3", "Braak 4", "Braak 5", "Braak 6"]
                 cmap = reverse(Makie.wong_colors()[1:5])
+                abr = round(rsquared(df.mean_ab_sols, df.mean_ab), sigdigits=2)
+                taur = round(rsquared(df.mean_tau_sols, df.mean_tau), sigdigits=2)
+                atrr = round(rsquared(df.mean_atr_sols, df.mean_atr), sigdigits=2)
+                abdr = round(rsquared(df.mean_ab_sol_diff, df.mean_ab_diff), sigdigits=2)
+                taudr = round(rsquared(df.mean_tau_sol_diff, df.mean_tau_diff), sigdigits=2)
+
                 for (i, rois) in enumerate(reverse(bs))
 
-                        abr = round(rsquared(df.mean_ab_sols, df.mean_ab), sigdigits=2)
-                        taur = round(rsquared(df.mean_tau_sols, df.mean_tau), sigdigits=2)
-                        atrr = round(rsquared(df.mean_atr_sols, df.mean_atr), sigdigits=2)
-                        abdr = round(rsquared(df.mean_ab_sol_diff, df.mean_ab_diff), sigdigits=2)
-                        taudr = round(rsquared(df.mean_tau_sol_diff, df.mean_tau_diff), sigdigits=2)
+                        
                         # CairoMakie.scatter!(ax1, df.mean_ab_sols,df.mean_ab, color=(:grey, 0.75), markersize=20 )
                         CairoMakie.scatter!(ax1, df.mean_ab_sols[rois],df.mean_ab[rois], color=cmap[i], markersize=20 ,label=labels[i])
                         # CairoMakie.text!(ax4, 1.0, 0., text= L"R^{2} = %$bf_abr", align=(:right, :bottom), space=:relative, offset=(-20, 10), fontsize=rsize)
