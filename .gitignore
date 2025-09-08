@@ -5,6 +5,7 @@ output/plots
 output/chains/population-atn-old
 output/chains/population-atn
 output/chains/population-scaled-atn
+output/analysis-derivatives/colocalisation/old
 output/bf-output
 py-analysis/env
 py-analysis/roi-data
