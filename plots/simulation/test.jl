@@ -33,7 +33,7 @@ fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.AMYLOID_STATUS
 fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COMPOSITE_REF")
 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
-tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 0, tau_data_df);
+tau_pos_df = filter(x ->  x.MTL_Status == 0 && x.NEO_Status == 0, tau_data_df);
 tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
 
 pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
@@ -56,7 +56,7 @@ max_norm(c) =  c ./ maximum(c);
 # Tau data
 # --------------------------------------------------------------------------------
 tau_suvr = calc_suvr.(tau_data)
-vi = part .+ (4.7851.* (fbb_ui .- fbb_u0))
+vi = part .+ (3.2258211441306877 .* (fbb_ui .- fbb_u0))
 normalise!(tau_suvr, v0, vi)
 tau_conc = map(x -> conc.(x, v0, vi), tau_suvr)
 tau_inits = [d[:,1] for d in tau_conc]
@@ -65,7 +65,7 @@ _mean_tau_init = mean(tau_inits)
 _mean_tau_init_sym = (_mean_tau_init[1:36] .+ _mean_tau_init[37:end]) ./ 2
 mean_tau_init = [_mean_tau_init_sym; _mean_tau_init_sym]
 # mean_tau_init = _mean_tau_init
-filtered_tau_idx = findall(x -> x < 0.05, mean_tau_init)
+filtered_tau_idx = findall(x -> x < 0.03, mean_tau_init)
 mean_tau_init[filtered_tau_idx] .= 0
 
 using CairoMakie; CairoMakie.activate!()
@@ -73,6 +73,8 @@ scatter(mean_tau_init[1:36])
 
 vi = part .+ (coupling .* (fbb_ui .- fbb_u0))
 Ld = inv(diagm(vi .- v0)) * L * diagm(vi .- v0)
+
+atn_model = make_scaled_atn_model((fbb_ui .- fbb_u0), (part .- v0), Ld)
 
 amyloid_production = 0.34 
 tau_transport = 0.05 
@@ -90,123 +92,98 @@ d2 = reduce(hcat, [sol(t, Val{2}) for t in 0:1:80])
 d3 = reduce(hcat, [sol(t, Val{3}) for t in 0:1:80])
 ab_threshold = Vector{Float64}()
 tau_threshold = Vector{Float64}()
-tau_acceleration = Vector{Float64}()
 for i in 1:72
     ab_dmax = argmax(d1[i, :])
     tau_dmax = argmax(d1[72 + i, :])
 
-    ab_t = argmin(d2[i, ab_dmax:end])
+    ab_t = argmax(d3[i, ab_dmax:end])
     tau_t = argmax(d3[72 + i, 1:tau_dmax])
-    tau_t_acc = argmax(d2[72 + i, 1:tau_dmax])
-    push!(ab_threshold, sol(ab_t)[i])
+    push!(ab_threshold, sol(ab_dmax)[i])
     push!(tau_threshold, sol(tau_t)[72 + i])
-    push!(tau_acceleration, tau_t_acc)
 
 end
 
-writedlm(projectdir("output/analysis-derivatives/ab-derivatives/ab-thresholds.csv"),ab_threshold)
-writedlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-thresholds.csv"),tau_threshold)
-# amyloid_production = 0.24 
-# tau_transport = 0.03 
-# tau_production = 0.1
-# coupling = 3.2258211441306877
-# atrophy = 0.08
-# p = [amyloid_production, tau_transport, tau_production, coupling, atrophy]
-# atn_model = make_scaled_atn_model((fbb_ui .- fbb_u0), (part .- v0), L)
+begin
+    cols = Makie.wong_colors()
+    CairoMakie.activate!()
+    f = Figure(size=(600, 500))
+    ax = Axis(f[1,1])
+    # plot!(sol, idxs=29, color=cols[1])
+    plot!(sol, idxs=72 + 35, color=cols[2])
+    ax = Axis(f[2,1])
+    for i in [35]
+        scatter!(0:1:80, d3[72 + i,:])    
+    end
+    f
+end
 
-# prob = ODEProblem(atn_model, [mean_ab_init; mean_tau_init; zeros(72)], (0, 80), p)
-# sol = solve(prob, Tsit5(), reltol=1e-9, abstol=1e-9)
+ts = [argmax(d) for d in eachrow(d2[73:108,1:50])]
+ts_scaled = (ts .- minimum(ts)) ./ (maximum(ts) .- minimum(ts)) 
+scatter(ts_scaled)
+dktnames[sortperm(ts_scaled)]
 
-# d1 = reduce(hcat, [sol(t, Val{1}) for t in 0:1:80])
-# d2 = reduce(hcat, [sol(t, Val{2}) for t in 0:1:80])
-# d3 = reduce(hcat, [sol(t, Val{3}) for t in 0:1:80])
-# d4 = reduce(hcat, [sol(t, Val{4}) for t in 0:1:80])
+using GLMakie, Colors, ColorSchemes; GLMakie.activate!()
+using Connectomes
+plot_roi(get_node_id.(right_cortex)[sortperm(ts_scaled)], collect(range(0, 1, 36)), ColorSchemes.RdYlBu)
 
-# begin
-#     cols = Makie.wong_colors()
-#     CairoMakie.activate!()
-#     f = Figure(size=(600, 500))
-#     ax = Axis(f[1,1])
-#     plot!(sol, idxs=29, color=cols[1])
-#     plot!(sol, idxs=72 + 29, color=cols[2])
+function atn(x, p, ui, part, L; n = 72)
+    u = @view x[1:n]
+    v = @view x[n+1:2n]
+    a = @view x[2n+1:3n]
 
-#     ax = Axis(f[2,1])
-#     # scatter!(collect(0:1:80), d1[72 + 27,:])    
-#     scatter!(0:1:80, d3[27,:])    
-#     scatter!(0:1:80, d3[72 + 27,:])    
-#     # for i in [12, 25, 27, 29, 31, 53, 36]
-#     #     scatter!(0:1:80, d3[72 + i,:])    
-#     # end
-#     f
-# end
-
-# ts = [argmax(d) for d in eachrow(d2[73:108,1:50])]
-# ts_scaled = (ts .- minimum(ts)) ./ (maximum(ts) .- minimum(ts)) 
-# scatter(ts_scaled)
-# dktnames[sortperm(ts_scaled)]
-
-# using GLMakie, Colors, ColorSchemes; GLMakie.activate!()
-# using Connectomes
-# plot_roi(get_node_id.(right_cortex)[sortperm(ts_scaled)], collect(range(0, 1, 36)), ColorSchemes.RdYlBu)
-
-# function atn(x, p, ui, part, L; n = 72)
-#     u = @view x[1:n]
-#     v = @view x[n+1:2n]
-#     a = @view x[2n+1:3n]
-
-#     α_a, ρ_t, α_t, β, η = p
+    α_a, ρ_t, α_t, β, η = p
         
-#     Δ  = (part .+ (β .* ui)) 
-#     δ = (part .+ (β .* u .* ui))
-#     # vi = part .+ (β .* u) #.* ( 1 .- a )
-#     du = α_a .* ui .* u .* (1 .- u)
-#     dv = -ρ_t * L * v .+ α_t .* Δ .* v .* ((δ./Δ) .- v)
-#     da = η .* v .* ( 1 .- a )
+    Δ  = (part .+ (β .* ui)) 
+    δ = (part .+ (β .* u .* ui))
+    # vi = part .+ (β .* u) #.* ( 1 .- a )
+    du = α_a .* ui .* u .* (1 .- u)
+    dv = -ρ_t * L * v .+ α_t .* Δ .* v .* ((δ./Δ) .- v)
+    da = η .* v .* ( 1 .- a )
 
-#     return du, dv, da
+    return du, dv, da
 
-# end
+end
 
-# amyloid_production = 0.34 
-# tau_transport = 0.05 
-# tau_production = 0.11
-# coupling = 4.5
-# atrophy = 0.15 
-# p = [amyloid_production, tau_transport, tau_production, coupling, atrophy]
-# d = [atn(ones(72*3) .* i, p, 
-#                         fbb_ui .- fbb_u0, part .- v0, Ld) for i in 0:0.01:1]
-# begin
-#     f = Figure()
-#     ax = Axis(f[1,1])
-#     for (i, t) in enumerate(0:0.01:1)
-#         scatter!(t, d[i][1][27], color=:grey)
-#         scatter!(t, d[i][2][27], color=:red)
-#     end
-#     f
-# end
+amyloid_production = 0.34 
+tau_transport = 0.05 
+tau_production = 0.11
+coupling = 4.5
+atrophy = 0.15 
+p = [amyloid_production, tau_transport, tau_production, coupling, atrophy]
+d = [atn(ones(72*3) .* i, p, 
+                        fbb_ui .- fbb_u0, part .- v0, Ld) for i in 0:0.01:1]
+begin
+    f = Figure()
+    ax = Axis(f[1,1])
+    for (i, t) in enumerate(0:0.01:1)
+        scatter!(t, d[i][1][27], color=:grey)
+        scatter!(t, d[i][2][27], color=:red)
+    end
+    f
+end
 
-# function atn_fixed(D, x, p, t;ui = fbb_ui .- fbb_u0, part = part.-v0, L = Ld)
-#     u = @view x[1:72]
-#     v = @view x[73:144]
-#     a = @view x[145:216]
+function atn_fixed(D, x, p, t;ui = fbb_ui .- fbb_u0, part = part.-v0, L = Ld)
+    u = @view x[1:72]
+    v = @view x[73:144]
+    a = @view x[145:216]
 
-#     α_a, ρ_t, α_t, β, η = p
+    α_a, ρ_t, α_t, β, η = p
         
-#     Δ  = (part .+ (β .* ui)) 
-#     δ = (part .+ (β .* u .* ui))
-#     # vi = part .+ (β .* u) #.* ( 1 .- a )
-#     D[1:72] .= α_a .* ui .* u .* (1 .- u)
-#     D[73:144] .= -ρ_t * L * v .+ α_t .* Δ .* v .* (1 .- v)
-#     D[145:216] .= η .* v .* ( 1 .- a )
+    Δ  = (part .+ (β .* ui)) 
+    δ = (part .+ (β .* u .* ui))
+    # vi = part .+ (β .* u) #.* ( 1 .- a )
+    D[1:72] .= α_a .* ui .* u .* (1 .- u)
+    D[73:144] .= -ρ_t * L * v .+ α_t .* Δ .* v .* (1 .- v)
+    D[145:216] .= η .* v .* ( 1 .- a )
 
-#     # return nothing
-# end
+    # return nothing
+end
 
 # --------------------------------------------------------------------------------
 # Modelling!
 # --------------------------------------------------------------------------------
-# for (hem_idx, hem) in zip([1:36, 37:72, 1:72], ["right", "left", "all"])
-for (hem_idx, hem) in zip([1:72], ["all"])
+
+for (hem_idx, hem) in zip([1:36, 37:72, 1:72], ["right", "left", "all"])
     
     if hem == "right" || hem == "left"
         _cortex = filter(x -> get_hemisphere(x) == hem, cortex)
@@ -219,11 +196,11 @@ for (hem_idx, hem) in zip([1:72], ["all"])
 
     inits = [mean_ab_init[hem_idx]; mean_tau_init[hem_idx]; zeros(length(hem_idx))]
     
-    ab_tau_coloc_time = calculate_colocalisation_order(_cortex, pst, 3.2258211441306877, atn_model, inits, tau_threshold, ab_threshold)
-    display(ab_tau_coloc_time)
-    # CSV.write(projectdir("output/analysis-derivatives/colocalisation/0175/colocalisation-inits-order-" * hem * ".csv"), ab_tau_coloc_time)
+    ab_tau_coloc_time = calculate_colocalisation_order(_cortex, pst, 3.2258211441306877, atn_model, inits, 0.05, 0.5)
 
-    ab_tau_coloc_order = calculate_colocalisation_prob(_cortex, pst, 3.2258211441306877, atn_model, inits, tau_threshold, ab_threshold)
-    display(ab_tau_coloc_order)
-    # CSV.write(projectdir("output/analysis-derivatives/colocalisation/0175/colocalisation-inits-prob-" * hem * ".csv"), ab_tau_coloc_order)
+    CSV.write(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-" * hem * ".csv"), ab_tau_coloc_time)
+
+    ab_tau_coloc_order = calculate_colocalisation_prob(_cortex, pst, 3.2258211441306877, atn_model, inits, 0.05, 0.5)
+
+    CSV.write(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-" * hem * ".csv"), ab_tau_coloc_order)
 end
