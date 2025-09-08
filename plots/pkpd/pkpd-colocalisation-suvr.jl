@@ -1,4 +1,4 @@
-using ATNModelling.SimulationUtils: make_prob, make_scaled_atn_model, 
+using ATNModelling.SimulationUtils: make_prob, make_atn_pkpd_model, 
                                     simulate, resimulate, simulate_amyloid,
                                     load_ab_params, load_tau_params, conc, make_scaled_atn_pkpd_model
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names, get_distance_laplacian, get_braak_regions
@@ -10,7 +10,6 @@ using DrWatson: projectdir, datadir
 using CSV, DataFrames
 using CairoMakie, Colors, ColorSchemes, GLMakie
 using Statistics, SciMLBase
-using LinearAlgebra
 # --------------------------------------------------------------------------------
 # Tracer independent data
 # --------------------------------------------------------------------------------
@@ -19,6 +18,8 @@ parc = get_parcellation() |> get_cortex
 cortex = filter(x -> get_hemisphere(x) == "right", parc)
 
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
+L = laplacian_matrix(c) 
+Lh = L[1:36, 1:36]
 Ld = get_distance_laplacian()
 
 cingulate = findall(x -> contains(get_label(x), "cingulate"), cortex)
@@ -29,9 +30,13 @@ m[[35,36]] .= 1
 dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 
 using Serialization
-pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
 pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-sepbeta-1x1000.jls"));
 meanpst = mean(pst)
+mean([meanpst["α_a[$i]", :mean] for i in 1:18])
+mean([meanpst["ρ_t[$i]", :mean] for i in 1:18])
+mean([meanpst["α_t[$i]", :mean] for i in 1:18])
+mean([meanpst["η[$i]", :mean] for i in 1:18])
+
 mean([meanpst["α_a[$i]", :mean] for i in 1:34])
 mean([meanpst["ρ_t[$i]", :mean] for i in 1:34])
 mean([meanpst["α_t[$i]", :mean] for i in 1:34])
@@ -56,68 +61,56 @@ fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COM
 fbb_suvr = calc_suvr.(fbb_data)
 normalise!(fbb_suvr, fbb_u0, fbb_ui)
 fbb_conc = map(x -> conc.(x, fbb_u0, fbb_ui), fbb_suvr)
-fbb_inits = [d[:,1] for d in fbb_conc]
+fbb_inits = [d[:,1] for d in fbb_suvr]
 mean_fbb_init = mean(fbb_inits)[1:36]
 println("ab concentration = $(mean_fbb_init[29])")
 
 fbb_tau_suvr = calc_suvr.(tau_data)
-vi = part .+ (4.7851 .* (fbb_ui .- fbb_u0))
-# vi = part .+ (4.5.* (fbb_ui .- fbb_u0))
+vi = part .+ (3.2258211441306877 .* (fbb_ui .- fbb_u0))
+# vi = part .+ (4.5 .* (fbb_ui .- fbb_u0))
 normalise!(fbb_tau_suvr, v0, vi)
 fbb_tau_conc = map(x -> conc.(x, v0, vi), fbb_tau_suvr)
-fbb_tau_inits = [d[:,1] for d in fbb_tau_conc]
-mean_tau_init = mean(fbb_tau_inits)[1:36]
-mean_tau_init[findall(x -> x < 0.05, mean_tau_init)] .= 0
-println("tau concentration = $(mean_tau_init[29])")
-scatter(mean_tau_init)
+fbb_tau_inits = [d[:,1] for d in fbb_tau_suvr]
 
+mean_tau_init = mean(fbb_tau_inits)[1:36]
+tau_init_idx = findall(x -> x < 0.05, conc.(mean_tau_init, v0[1:36], vi[1:36]))
+mean_tau_init[tau_init_idx] .= v0[1:36][tau_init_idx]
+CairoMakie.activate!()
+scatter(conc.(mean_tau_init, v0[1:36], vi[1:36]))
+findall(x -> x > 0, conc.(mean_tau_init, v0[1:36], vi[1:36]))
 vol_init = zeros(36)
-ts = range(0, 240, 480)
+
+atn_pkpd = make_atn_pkpd_model(fbb_u0[1:36], fbb_ui[1:36], v0[1:36], part[1:36], Lh, Ld, m, 28)
+
+# ts = range(0, 240, 480)
 ts = range(0, 360, 720)
 
-# amyloid_production = 0.37 / 12
-# tau_transport = 0.05 / 12
-# tau_production = 0.20 /12
-# coupling = 3.2258211441306877
-# atrophy = 0.1 / 12
+amyloid_production = 0.35 / 12
+tau_transport = 0.06 / 12
+tau_production = 0.2 /12
+coupling = 3.2258211441306877
+atrophy = 0.1 / 12
 
-amyloid_production = 0.34 / 12
-tau_transport = 0.05 / 12
-tau_production = 0.12 /12
-coupling = 4.7851
-atrophy = 0.14 / 12
-
-# amyloid_production = 0.24 / 12
-# tau_transport = 0.03 / 12
-# tau_production = 0.1 /12
-# coupling = 3.2258211441306877
-# atrophy = 0.1 / 12
 drug_concentration = 100.
 drug_transport = 0.5 / 12
 drug_effect = 0.0 / 12
 drug_clearance = 0.5 / 12
-
-L = laplacian_matrix(c) 
-Δ = part .+ (coupling .* (fbb_ui .- fbb_u0))
-Lh = inv(diagm(vi .- v0)) * L * diagm(vi .- v0)
-
-atn_pkpd = make_scaled_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36] .- v0[1:36], Lh[1:36, 1:36], Ld, m, 28)
-
-sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36); mean_fbb_init], 
+sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36);mean_fbb_init], 
                 (0.0, 360.0), [amyloid_production, tau_transport, tau_production, 
                                         coupling, atrophy, 
                                         drug_transport, drug_effect, 
                                         drug_concentration, drug_clearance]; 
                                         saveat=ts, tol=1e-9)
-CairoMakie.activate!()
+
 plot(sol, idxs=1:36)
 plot(sol, idxs=37:72)
 plot(sol, idxs=73:108)
 plot(sol, idxs=109:144)
 plot(sol, idxs=145:180)
 
-absol = Array(sol[1:36,:])
-tausol = Array(sol[37:72,:])
+absol = conc.(Array(sol[1:36,:]), fbb_u0[1:36], fbb_ui[1:36])
+tausol = conc.(Array(sol[37:72,:]), v0[1:36], vi[1:36])
+
 begin
     f = Figure()
     ax1 = Axis(f[1,1])
@@ -138,21 +131,19 @@ drugsol = Array(sol[109:144,:]) ./ maximum(Array(sol[109:144,:]))
 tau_seed = findall(x -> x >= 0.1, tausol)
 tau_seed_idx = zeros(36, size(sol,2))
 tau_seed_idx[tau_seed] .= 1.0
-tau_seed_idx = tausol .>= tau_threshold[1:36]
 # heatmap(tau_seed_idx)
 
-ab_seed = findall(x -> x >= 0.9, absol)
+ab_seed = findall(x -> x >= 0.75, absol)
 ab_seed_idx = zeros(36, size(sol,2))
 ab_seed_idx[ab_seed] .= 1.0
-ab_seed_idx = absol .>= ab_threshold[1:36]
 # heatmap(ab_seed_idx)
 
 ab_tau_coloc = tau_seed_idx .* ab_seed_idx
 # heatmap(ab_tau_coloc)
-coloc_t = findall(x -> x > 0, sum(ab_tau_coloc, dims=1))
-coloc_node = findall(x -> x > 0, ab_tau_coloc[:, coloc_t[1][2]])
+coloc_t = findfirst(x -> x > 0, sum(ab_tau_coloc, dims=1))
+coloc_node = findall(x -> x > 0, ab_tau_coloc[:, coloc_t[2]])
 dktnames[coloc_node][1]
-sol.t[coloc_t[1][2]]
+sol.t[coloc_t[2]]
 
 # bs = get_braak_regions()
 # rbs = [filter(x -> x < 37, b) for b in bs]
@@ -193,8 +184,8 @@ atrsols = Vector{Array{Float64}}()
 drugsols = Vector{Array{Float64}}()
 int_ts = collect(0:24:360)
 for (i, t) in enumerate(int_ts)
-    atn_pkpd = make_scaled_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36] .- v0[1:36], Lh[1:36, 1:36], Ld, m, t)
-
+    # atn_pkpd = make_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36] .- v0[1:36], Lh, Ld, m, t)
+    atn_pkpd = make_atn_pkpd_model(fbb_u0[1:36], fbb_ui[1:36], v0[1:36], part[1:36], Lh, Ld, m, t)
     
     # amyloid_production = 1. / 12
     # tau_transport = 0.2 / 12
@@ -203,17 +194,17 @@ for (i, t) in enumerate(int_ts)
     # atrophy = 0.1 / 12
     drug_concentration = 100.
     drug_transport = 0.5 / 12
-    drug_effect = 0.1 / 12
+    drug_effect = 0.5 / 12
     drug_clearance = 0.5 / 12
-    sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36);mean_fbb_init], 
+    sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36); mean_fbb_init], 
                     (0.0, 360.0), [amyloid_production, tau_transport, tau_production, 
                                             coupling, atrophy, 
                                             drug_transport, drug_effect, 
                                             drug_concentration, drug_clearance]; 
                                             saveat=ts, tol=1e-12)
 
-    push!(absols, Array(sol[1:36,:]))
-    push!(tausols, Array(sol[37:72,:]))
+    push!(absols, conc.(Array(sol[1:36,:]), fbb_u0[1:36], fbb_ui[1:36]))
+    push!(tausols, conc.(Array(sol[37:72,:]), v0[1:36], vi[1:36]))
     push!(atrsols, Array(sol[73:108,:]))
     push!(drugsols, Array(sol[109:144,:]))    
 end
@@ -293,7 +284,8 @@ begin
     atr_end = [mean(t[rois, end]) for t in atrsols]
     scatter!(collect(24:24:360), [atr_end[i + 2] - atr_end[i + 1] for i in 0:14], label="Atr")
     scatter!(collect(24:24:360), [tau_end[i + 2] - tau_end[i + 1] for i in 0:14], label="Tau")
-    vlines!(sol.t[coloc_t[1][2]], linestyle=:dash, color=:black, linewidth=2.5)
+    # scatter!(collect(6:6:120), [tau_end[i + 2] - tau_end[i + 1] for i in 0:19])
+    vlines!(sol.t[coloc_t[2]], linestyle=:dash, color=:black, linewidth=2.5)
     ax.alignmode = Mixed(left = 0, right = 0)
     axislegend(ax, unique=true, position=:rt,  framevisible=false, fontsize=25, patchsize=(25,25))
 

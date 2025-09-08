@@ -1,6 +1,6 @@
 using ATNModelling.SimulationUtils: load_ab_params, load_tau_params,
                                     make_atn_model, make_prob, simulate, resimulate,
-                                    generate_data
+                                    generate_data, make_scaled_atn_model
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex
 using ATNModelling.InferenceModels: atn_inference, fit_model
 using Connectomes: laplacian_matrix, get_label, get_hemisphere, get_node_id,
@@ -16,7 +16,6 @@ u0, ui = load_ab_params()
 v0, vi, part = load_tau_params()
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2)
 L = laplacian_matrix(c)
-
 
 α_a, ρ_t, α_t, β, η = 0.75, 0.015, 0.5, 3.75, 0.1
 params = [α_a, ρ_t, α_t, β, η]
@@ -38,7 +37,31 @@ tspan = (0.0,30.0)
 func = make_atn_model(u0, ui, v0, part, L)
 
 ts = LinRange(0.0, 20, 5)
-sol_ts = simulate(func, inits, tspan, params; saveat=0.1)
+sol = simulate(func, inits, tspan, params; saveat=0.1)
+
+plot(sol, idxs=1:72)
+plot(sol, idxs=73:144)
+
+ab_inits = ones(72) .* 0.2
+tau_inits = zeros(72)
+atr_inits = zeros(72)
+
+tau_seed_regions = ["entorhinal" ]#,"Left-Amygdala", "Right-Amygdala", "Left-Hippocampus", "Right-Hippocampus"]
+tau_seed_idx = findall(x -> get_label(x) ∈ tau_seed_regions, c.parc)
+tau_inits[tau_seed_idx] .+= 0.2
+
+inits = [ab_inits; tau_inits; atr_inits]
+
+tspan = (0.0,30.0)
+
+func = make_scaled_atn_model(ui .- u0, part .- v0, L)
+
+ts = LinRange(0.0, 20, 5)
+sol = simulate(func, inits, tspan, params; saveat=0.1)
+
+plot(sol, idxs=1:72)
+plot(sol, idxs=73:144)
+
 sol_ts = simulate(func, inits, tspan, params; saveat=ts)
 
 @code_warntype simulate(func, inits, tspan, params; saveat=ts)
@@ -58,6 +81,7 @@ tau_c = sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5);
 atr_c = sequential_palette(15, s = 0.9, c = 0.9, w =0.25, b = 0.5);
 
 begin
+    GLMakie.activate!()
     f = Figure(size=(1250, 800))
 
     g1 = f[1, 1:7] = GridLayout()
@@ -166,3 +190,55 @@ begin
     f
 end
 save(projectdir("output/plots/simulation/atn-simulation.jpeg"), f)
+
+α_a, ρ_t, α_t, β, η = 0.75, 0.015, 0.5, 3.75, 0.1
+params = [α_a, ρ_t, α_t, β, η]
+
+ab_inits = ones(72) .* 0.2
+tau_inits = zeros(72)
+atr_inits = zeros(72)
+
+tau_seed_regions = ["entorhinal" ]#,"Left-Amygdala", "Right-Amygdala", "Left-Hippocampus", "Right-Hippocampus"]
+tau_seed_idx = findall(x -> get_label(x) ∈ tau_seed_regions, c.parc)
+tau_inits[tau_seed_idx] .+= 0.2
+
+inits = [ab_inits; tau_inits; atr_inits]
+
+tspan = (0.0,30.0)
+
+L_ = inv(diagm(_vi)) * L * diagm(_vi)
+func = make_scaled_atn_model(ui .- u0, part .- v0, L_)
+
+ts = LinRange(0.0, 20, 5)
+sol = simulate(func, inits, tspan, params; saveat=0.1)
+sol_ts = simulate(func, inits, tspan, params; saveat=ts)
+plot(sol_ts, idxs=1:72)
+plot(sol_ts, idxs=73:144)
+
+
+function ode(du, v, p, t; v0=v0, vi=vi, L = L)
+    du .= -p[1] * L * (v .- v0) .+ p[2] .* (v .- v0) .* ((vi .- v0) - (v .- v0))
+end
+
+tau_inits = copy(v0)
+
+tau_seed_regions = ["entorhinal" ]#,"Left-Amygdala", "Right-Amygdala", "Left-Hippocampus", "Right-Hippocampus"]
+tau_seed_idx = findall(x -> get_label(x) ∈ tau_seed_regions, c.parc)
+tau_inits[tau_seed_idx] .+= 0.2 .* ((part[tau_seed_idx] .+ β .* (ui[tau_seed_idx] - u0[tau_seed_idx])) .- v0[tau_seed_idx])
+
+sol = simulate(ODEFunction(ode), tau_inits, (0, 30), [0.03, 0.3], saveat=0.1)
+plot(sol)
+
+function ode(du, v, p, t; v0 = v0, vi= vi, L = L)
+    du .= -p[1] * L * v .+ p[2] .* v .* (vi .- v0) .* ( 1 .- v )
+end
+
+tau_inits = zeros(72)
+
+tau_seed_regions = ["entorhinal" ]#,"Left-Amygdala", "Right-Amygdala", "Left-Hippocampus", "Right-Hippocampus"]
+tau_seed_idx = findall(x -> get_label(x) ∈ tau_seed_regions, c.parc)
+tau_inits[tau_seed_idx] .+= 0.2
+
+sol = simulate(ODEFunction(ode), tau_inits, (0, 30), [0.03, 0.3], saveat=0.1)
+plot(sol)
+
