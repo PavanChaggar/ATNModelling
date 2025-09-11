@@ -43,3 +43,33 @@ part_sym_increase = (part_increase[1:36] .+ part_increase[37:end]) ./ 2
 sympart = v0 .+ [part_sym_increase; part_sym_increase]
 
 writedlm(projectdir("output/analysis-derivatives/tau-derivatives/pypart-sym.csv"), sympart)
+
+# Cutoffs 
+using GaussianMixtures, Distributions
+data = ADNIDataset(taudata, dktnames; qc=true)
+d = reduce(hcat, get_initial_conditions.(data))
+
+ics = get_initial_conditions.(data)
+ms = Vector{Float64}()
+stds = Vector{Float64}()
+ws = Vector{Float64}()
+for i in 1:72
+    gmm = GMM(2, reshape(d[i, :], 1023, 1))
+
+    μ = means(gmm)
+    Σ = covars(gmm)
+    w = weights(gmm)
+    idx = argmin(μ)
+    push!(ms, μ[idx])
+    push!(stds, sqrt(Σ[idx]))
+    push!(ws, weights(gmm)[idx])
+end
+
+cutoffs = quantile.(Normal.(ms, stds), 0.75)
+mean(conc.(cutoffs, v0, vi))
+cutoffs = ms .+ 2 .* stds
+mean(conc.(cutoffs, v0, vi))
+writedlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-2std.csv"), cutoffs)
+cutoffs = ms .+ 1 .* stds
+mean(conc.(cutoffs, v0, vi))
+writedlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-1std.csv"), cutoffs)
