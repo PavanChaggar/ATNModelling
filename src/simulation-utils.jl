@@ -94,12 +94,26 @@ function make_scaled_atn_model(ui, part, L)
     return ODEFunction(atn)
 end
 
-"""
-   make_scaled_atn_model(u0, ui, v0, part, L)
+function make_scaled_atn_model_fixed(ui, part, L)
+    n = length(ui)
+    function atn(D, x, p, t;)
+        u = @view x[1:n]
+        v = @view x[n+1:2n]
+        a = @view x[2n+1:3n]
 
-Returns an `ODEFunction` correpsonding to the scaled ATN model on a single hemisphere with 
-fixed parameters ``ui`, `part` and graph Laplacian `L`.
-"""
+        α_a, ρ_t, α_t, β, η = p
+         
+        Δ  = (part .+ (β .* ui)) 
+        δ = (part .+ (β .* u .* ui))
+        # vi = part .+ (β .* u) #.* ( 1 .- a )
+        D[1:n] .= α_a .* ui .* u .* (1 .- u)
+        D[n+1:2n] .= -ρ_t * L * v .+ α_t .* Δ .* v .* (1 .- v)
+        D[2n+1:3n] .= η .* v .* ( 1 .- a )
+
+        # return nothing
+    end
+    return ODEFunction(atn)
+end
 function make_scaled_atn_model_hemisphere(ui, part, L)
     function atn(D, x, p, t;)
         u = @view x[1:36]
@@ -148,6 +162,30 @@ function make_scaled_atn_pkpd_model(ui, part, L, Ld, m, t0=0)
         f = α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
         D[1:36] .= α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
         D[37:72] .= -ρ_t * L * v .+ α_t .* Δ .* v .* ((δ./Δ) .- v)
+        D[73:108] .= η .* v .* ( 1 .- a )
+        D[109:144] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
+        D[145:end] .= heaviside.(f) .* (α_a .* ui .* q .* (1 .- q) .- α_d .* d .* q)
+    end
+    return ODEFunction(atn_pkpd)
+end
+
+function make_scaled_atn_pkpd_model_tau(ui, part, L, Ld, m, t0=0)
+    function atn_pkpd(D, x, p, t)
+        u = @view x[1:36]
+        v = @view x[37:72]
+        a = @view x[73:108]
+        d = @view x[109:144]
+        q = @view x[145:end]
+        
+        α_a, ρ_t, α_t, β, η, ρ_d, α_d, α_c, λ_d = p
+         
+        Δ  = (part .+ (β .* ui)) 
+        δ = (part .+ (β .* q.* ui))
+        
+        f =  α_t .* Δ .* v .* ((δ./Δ) .- v)
+        # println(((δ./Δ) .- f)[29])
+        D[1:36] .= α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
+        D[37:72] .= -ρ_t * L * v .+ heaviside.((δ./Δ) .- f) .* f
         D[73:108] .= η .* v .* ( 1 .- a )
         D[109:144] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
         D[145:end] .= heaviside.(f) .* (α_a .* ui .* q .* (1 .- q) .- α_d .* d .* q)
