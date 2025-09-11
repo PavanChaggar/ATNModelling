@@ -83,7 +83,7 @@ ts = t_df.ab_time
 # --------------------------------------------------------------------------------
 # Simulation visualisatin
 # --------------------------------------------------------------------------------
-using GLMakie
+using GLMakie; GLMakie.activate!()
 using Colors, ColorSchemes
 
 _vi = part .+ (3.21 .* (ui .- u0))
@@ -96,6 +96,7 @@ tau_c = sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5);
 atr_c = sequential_palette(15, s = 0.9, c = 0.9, w =0.25, b = 0.5);
 
 begin
+    GLMakie.activate!()
     f = Figure(size=(1350, 1200))
     cols = Makie.wong_colors()
 
@@ -108,28 +109,6 @@ begin
     g1 = gb[1, 1] = GridLayout()
     g2 = gb[2, 1] = GridLayout()
     g3 = gb[3, 1] = GridLayout()
-
-    # AB integration 
-    node = 29
-    roi_df = baseline_difference(data[ts_idx], node)
-    roi_vals = roi_df.ab_suvr
-    
-    ts_idx = t_df.t_idx
-    ts = t_df.ab_time
-    
-    # ax = Axis(gt1[1,1], 
-    #             xlabel="t / years", xlabelsize=25, xticks=-20:20:80,
-    #             ylabel="SUVR", ylabelsize=25, 
-    #             yticks=0.5:0.25:1.25, yticksize=10, 
-    #             xticklabelsize=25, yticklabelsize=25)
-    # xlims!(ax, 0, 85)
-    # ylims!(ax, 0.5, 1.35)
-    # scatter!(ts, roi_vals, color=(cols[5], 0.5))
-    # _params = [dfparams.diff[node], dfparams.alpha[node], dfparams.t50[node], dfparams.u0[node]]
-    # lines!(0:1:100, sigmoid(0:1:100, _params), color=cols[1], linewidth=5)
-    # hlines!(ax, dfparams.u0[node], color=cols[2], linewidth=2.5)
-    # hlines!(ax, dfparams.ui[node], color=cols[2], linewidth=2.5)
-    # ax.alignmode = Mixed(left = 0)
     
     # AB carrying capacities
     cmap = ColorSchemes.viridis;
@@ -177,16 +156,20 @@ begin
     fbp_fitted_model = curve_fit(linearmodel, fbp_ui .- fbp_u0, vi .- part, [1.0])
     println(fbp_fitted_model.param)
     println(rsquared(linearmodel(fbp_ui .- fbp_u0, fbp_fitted_model.param), vi .- part))
-    ax = Axis(gt3[1,1], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", xticks=0:0.25:0.75, xlabelsize=25, 
+    bf_fitted_model = curve_fit(linearmodel, bf_ui .- bf_u0, bf_vi .- bf_part, [1.0])
+    println(fbp_fitted_model.param)
+    println(rsquared(linearmodel(bf_ui .- bf_u0, bf_fitted_model.param), bf_vi .- bf_part))
+    ax = Axis(gt3[1,1], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", xticks=0:0.5:1.5, xlabelsize=25, 
                 ylabelsize=25, xticklabelsize=25, yticklabelsize=25)
-    xlims!(ax, 0, 0.8)
-    ylims!(ax, 0, 3)
-    scatter!(fbb_ui .- fbb_u0, vi .- part, color=alphacolor(cmap[1], 0.75), markersize=15, label="FBB")
-    
-    lines!(xs, linearmodel(xs, fbb_fitted_model.param), color=alphacolor(cmap[1], 0.75), linewidth=5)
-    scatter!(fbp_ui .- fbp_u0, vi .- part, color=alphacolor(cmap[2], 0.75), markersize=15, label="FBP")
-    lines!(xs, linearmodel(xs, fbp_fitted_model.param), color=alphacolor(cmap[2], 0.75), linewidth=5)
-    axislegend(ax, position=:lt, fontsize=25)
+    xlims!(ax, 0, 1.5)
+    ylims!(ax, 0, 4)
+    scatter!(fbb_ui .- fbb_u0, vi .- part, color=alphacolor(cmap[1], 0.5), markersize=15, label="FBB")
+    lines!(xs, linearmodel(xs, fbb_fitted_model.param), color=alphacolor(cmap[1], 0.5), linewidth=5)
+    scatter!(fbp_ui .- fbp_u0, vi .- part, color=alphacolor(cmap[2], 0.5), markersize=15, label="FBP")
+    lines!(xs, linearmodel(xs, fbp_fitted_model.param), color=alphacolor(cmap[2], 0.5), linewidth=5)
+    scatter!(bf_ui .- bf_u0, bf_vi .- bf_part, color=alphacolor(cmap[3], 0.5), markersize=15, label="FMM")
+    lines!(xs, linearmodel(xs, bf_fitted_model.param), color=alphacolor(cmap[3], 0.5), linewidth=5)
+    axislegend(ax, position=:rb, fontsize=25)
     ax.alignmode = Mixed(right = 0)
 
     # ATN trajectories
@@ -338,6 +321,37 @@ begin
     f
 end
 
+    # AB vs tau correlation 
+    cmap = Makie.wong_colors()
+    v0, vi, part = load_tau_params(tracer="FTP")
+    bf_v0, bf_vi, bf_part = load_tau_params(tracer="RO")
+    fbb_u0, fbb_ui = load_ab_params(tracer="FBB")
+    fbp_u0, fbp_ui = load_ab_params(tracer="FBP")
+    fmm_u0, fmm_ui = load_ab_params(tracer="FMM")
+    
+    xs = collect(0:0.1:1.8)
+    linearmodel(x, p) = p[1] .* x
+    fbb_fitted_model = curve_fit(linearmodel, fbb_ui .- fbb_u0, vi .- part, [1.0]);
+    println(fbb_fitted_model.param)
+    println(rsquared(linearmodel(fbb_ui .- fbb_u0, fbb_fitted_model.param), vi .- part))
+    fbp_fitted_model = curve_fit(linearmodel, fbp_ui .- fbp_u0, vi .- part, [1.0])
+    println(fbp_fitted_model.param)
+    println(rsquared(linearmodel(fbp_ui .- fbp_u0, fbp_fitted_model.param), vi .- part))
+    bf_fitted_model = curve_fit(linearmodel, bf_ui .- bf_u0, bf_vi .- bf_part, [1.0])
+    println(fbp_fitted_model.param)
+    println(rsquared(linearmodel(bf_ui .- bf_u0, bf_fitted_model.param), bf_vi .- bf_part))
+    ax = Axis(gt3[1,1], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", xticks=0:0.25:0.75, xlabelsize=25, 
+                ylabelsize=25, xticklabelsize=25, yticklabelsize=25)
+    xlims!(ax, 0, 1.5)
+    ylims!(ax, 0, 4)
+    scatter!(fbb_ui .- fbb_u0, vi .- part, color=alphacolor(cmap[1], 0.75), markersize=15, label="FBB")
+    lines!(xs, linearmodel(xs, fbb_fitted_model.param), color=alphacolor(cmap[1], 0.75), linewidth=5)
+    scatter!(fbp_ui .- fbp_u0, vi .- part, color=alphacolor(cmap[2], 0.75), markersize=15, label="FBP")
+    lines!(xs, linearmodel(xs, fbp_fitted_model.param), color=alphacolor(cmap[2], 0.75), linewidth=5)
+    scatter!(bf_ui .- bf_u0, bf_vi .- bf_part, color=alphacolor(cmap[3], 0.75), markersize=15, label="FMM")
+    lines!(xs, linearmodel(xs, bf_fitted_model.param), color=alphacolor(cmap[3], 0.75), linewidth=5)
+    axislegend(ax, position=:rb, fontsize=25)
+    ax.alignmode = Mixed(right = 0)
 
 using Turing, LinearAlgebra
 

@@ -1,35 +1,50 @@
-using ATNModelling.SimulationUtils: make_scaled_atn_pkpd_model, 
-                                    simulate, load_ab_params, load_tau_params, conc
-using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names, 
-                                    get_distance_laplacian
+using ATNModelling.SimulationUtils: make_prob, make_scaled_atn_model, make_scaled_atn_pkpd_model_tau,
+                                    simulate, resimulate, simulate_amyloid,
+                                    load_ab_params, load_tau_params, conc, make_scaled_atn_pkpd_model
+using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names, get_distance_laplacian, get_braak_regions
 using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
 
 using Connectomes: laplacian_matrix, get_label, get_hemisphere, get_node_id, plot_roi!
-using DifferentialEquations
-using CairoMakie, ColorSchemes, Colors
-using DrWatson
+using ADNIDatasets: ADNIDataset, get_id, get_dates, get_initial_conditions, calc_suvr, get_vol, get_times
+using DrWatson: projectdir, datadir
 using CSV, DataFrames
-using ADNIDatasets
-using Statistics
+using CairoMakie, Colors, ColorSchemes, GLMakie
+using Statistics, SciMLBase
+using LinearAlgebra
+using DelimitedFiles
 # --------------------------------------------------------------------------------
 # Tracer independent data
 # --------------------------------------------------------------------------------
 v0, vi, part = load_tau_params()
-u0, ui = load_ab_params(tracer="FBB")
 parc = get_parcellation() |> get_cortex
 cortex = filter(x -> get_hemisphere(x) == "right", parc)
 
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
-L = laplacian_matrix(c) 
-dktnames = get_parcellation() |> get_cortex |> get_dkt_names
-Lh = L[1:36, 1:36]
 Ld = get_distance_laplacian()
+
+cingulate = findall(x -> contains(get_label(x), "cingulate"), cortex)
+m = zeros(36)
+m[cingulate] .= 1
+m[[35,36]] .= 1
+
+dktnames = get_parcellation() |> get_cortex |> get_dkt_names
+
+using Serialization
+pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
+# pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-sepbeta-1x1000.jls"));
+meanpst = mean(pst)
+mean([meanpst["α_a[$i]", :mean] for i in 1:34])
+mean([meanpst["ρ_t[$i]", :mean] for i in 1:34])
+mean([meanpst["α_t[$i]", :mean] for i in 1:34])
+mean([meanpst["η[$i]", :mean] for i in 1:34])
+
+tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-2std.csv")) |> vec
 
 # --------------------------------------------------------------------------------
 # Load data
 # --------------------------------------------------------------------------------
-_ab_data_df =  CSV.read(datadir("ADNI/UCBERKELEY_AMY_6MM_29Nov2024.csv"), DataFrame)
-_tau_data_df = CSV.read(datadir("ADNI/UCBERKELEY_TAU_6MM_29Nov2024-Ab-tau-Status.csv"), DataFrame) 
+_ab_data_df =  CSV.read(datadir("ADNI/2025/UCBERKELEY_AMY_6MM_28Jul2025.csv"), DataFrame)
+_tau_data_df = CSV.read(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025-Ab-tau-Status.csv"), DataFrame) 
 
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
 tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 0, tau_data_df);
@@ -50,11 +65,17 @@ mean_fbb_init = mean(fbb_inits)[1:36]
 println("ab concentration = $(mean_fbb_init[29])")
 
 fbb_tau_suvr = calc_suvr.(tau_data)
+vi = part .+ (3.2258211441306877 .* (fbb_ui .- fbb_u0))
+# vi = part .+ (4.5.* (fbb_ui .- fbb_u0))
 normalise!(fbb_tau_suvr, v0, vi)
 fbb_tau_conc = map(x -> conc.(x, v0, vi), fbb_tau_suvr)
 fbb_tau_inits = [d[:,1] for d in fbb_tau_conc]
-mean_tau_init = mean(fbb_tau_inits)[1:36]
-mean_tau_init[findall(x -> x < 0.05, mean_tau_init)] .= 0
+
+_mean_tau_init = mean(fbb_tau_inits)
+idx = _mean_tau_init .< conc.(tau_cutoffs, v0, vi)
+_mean_tau_init[idx] .= 0
+mean_tau_init = maximum.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
+
 println("tau concentration = $(mean_tau_init[29])")
 scatter(mean_tau_init)
 
@@ -66,15 +87,14 @@ scatter(mean_tau_init)
 # m[[35,36]] .= 1
 
 amyloid_production = 0.35 / 12
-tau_transport = 0.06 / 12
-tau_production = 0.07 /12
-coupling = 4.5
-atrophy = 0.06 / 12
+tau_transport = 0.05 / 12
+tau_production = 0.2 / 12
+coupling = 3.2258211441306877
+atrophy = 0.1 / 12
 drug_concentration = 100.
 drug_transport = 0.5 / 12
-drug_effect = 0.025 / 12
+drug_effect = 0.1 / 12
 drug_clearance = 0.5 / 12
-
 # amyloid_production = 0.2
 # tau_transport = 0.01 
 # tau_production = 0.04 
@@ -87,42 +107,45 @@ drug_clearance = 0.5 / 12
 
 # tau_init = zeros(36)
 # tau_init[27] = 0.2
-# atn_pkpd = make_scaled_atn_pkpd_model(ui[1:36] .- u0[1:36], part[1:36], Lh, Ld, m, 0)
 
-ts = range(0,  300, 600)
-ts = range(0, 180, 480)
-sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
-                (0.0,  300.0), [amyloid_production, tau_transport, tau_production, 
+ts = range(0,  360, 600)
+# ts = range(0, 180, 480)
+
+atn_pkpd = make_scaled_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36] .- v0[1:36], L[1:36, 1:36], Ld, m, 0)
+# atn_pkpd = make_scaled_atn_pkpd_model_tau(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36] .- v0[1:36], L[1:36, 1:36], Ld, m, 0)
+
+sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36);mean_fbb_init], 
+                (0.0, 360.0), [amyloid_production, tau_transport, tau_production, 
                                         coupling, atrophy, 
                                         drug_transport, drug_effect, 
                                         drug_concentration, drug_clearance]; 
                                         saveat=ts, tol=1e-9)
 
-solts = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
-                (0.0, 300.0), [amyloid_production, tau_transport, tau_production, 
+solts = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36);mean_fbb_init], 
+                (0.0, 360.0), [amyloid_production, tau_transport, tau_production, 
                         coupling, atrophy, 
                         drug_transport, drug_effect, 
                         drug_concentration, drug_clearance]; 
-                        saveat=ts)
+                        saveat=ts, tol=1e-9)
 
-placebo_sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
-                (0.0, 300.0), [amyloid_production, tau_transport, tau_production, 
+placebo_sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36);mean_fbb_init], 
+                (0.0, 360.0), [amyloid_production, tau_transport, tau_production, 
                                         coupling, atrophy, 
                                         drug_transport, 0.0, 
                                         drug_concentration, drug_clearance]; 
-                                        saveat=ts)
+                                        saveat=ts, tol=1e-9)
 
-placebo_solts = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36)], 
-                (0.0, 300.0), [amyloid_production, tau_transport, tau_production, 
+placebo_solts = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36);mean_fbb_init], 
+                (0.0, 360.0), [amyloid_production, tau_transport, tau_production, 
                         coupling, atrophy, 
                         drug_transport, 0.0, 
                         drug_concentration, drug_clearance]; 
-                        saveat=ts)
+                        saveat=ts, tol=1e-9)
 
-absol = Array(placebo_sol[1:36,:])
-tausol = Array(placebo_sol[37:72,:])
-atrsol = Array(placebo_sol[73:108,:])
-drugsol = Array(placebo_sol[109:end,:]) 
+absol = Array(sol[1:36,:])
+tausol = Array(sol[37:72,:])
+atrsol = Array(sol[73:108,:])
+drugsol = Array(sol[109:end,:]) 
 
 begin
     CairoMakie.activate!()
@@ -172,11 +195,11 @@ begin
     p1 = Vector{Mesh}(undef, length(nodes))
     p2 = Vector{Mesh}(undef, length(nodes))
 
-    ax2 = Axis3(g2[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax2 = Axis3(g2[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax2)
     hidespines!(ax2)
     p1 .= plot_roi!(nodes, drugsol[:,1] ./ 420, cmap)
-    ax3 = Axis3(g2[2,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax3 = Axis3(g2[2,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax3)
     hidespines!(ax3)
     p2 .= plot_roi!(nodes, drugsol[:,1] ./ 420, cmap)
@@ -352,29 +375,29 @@ begin
     tausol = Array(placebo_solts[37:72,end])
     atrsol = Array(placebo_solts[73:108,end])
     
-    ax = Axis3(g1[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g1[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, absol, abcmap)
-    ax = Axis3(g1[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g1[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, absol, abcmap)
     
-    ax = Axis3(g2[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g2[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, tausol, taucmap)
-    ax = Axis3(g2[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g2[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, tausol, taucmap)
 
-    ax = Axis3(g3[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g3[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, atrsol, atrcmap)
-    ax = Axis3(g3[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g3[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, atrsol, atrcmap)
@@ -480,29 +503,29 @@ begin
     tausol = Array(solts[37:72,end])
     atrsol = Array(solts[73:108,end])
     
-    ax = Axis3(g1[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g1[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, absol, abcmap)
-    ax = Axis3(g1[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g1[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, absol, abcmap)
     
-    ax = Axis3(g2[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g2[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, tausol, taucmap)
-    ax = Axis3(g2[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g2[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, tausol, taucmap)
 
-    ax = Axis3(g3[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g3[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, atrsol, atrcmap)
-    ax = Axis3(g3[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax = Axis3(g3[2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, atrsol, atrcmap)
@@ -597,36 +620,40 @@ atrcmap = ColorScheme(atr_c); #ColorSchemes.Reds;
 
 begin
     GLMakie.activate!()
-    f = Figure(size=(1100, 1000), figure_padding=(20,20,20,20))
+    f = Figure(size=(1100, 900), figure_padding=(20,20,20,20))
     nodes = get_node_id.(cortex)
     lcmap = Makie.wong_colors()
     cmap = ColorSchemes.viridis
 
-    g1 = f[1, 1] = GridLayout(alignmode = Mixed(
+    gg = f[1, 1:2] = GridLayout(alignmode = Mixed(
         left = Makie.Protrusion(0),
         right = Makie.Protrusion(0),
-        bottom = Makie.Protrusion(50),
+        bottom = Makie.Protrusion(35),
         top = Makie.Protrusion(10)))
-
-    ax1 = Axis(g1[1,1], ylabel="Drug μg / ml ", ytickformat="{:.1f}", xlabel="Time / Months", yticklabelsize=25,
-    xticklabelsize=25, ylabelpadding=5, xlabelsize=25, ylabelsize=25)
-    xlims!(ax1, 0, 300)
-    # ylims!(ax1, 0, 1)
+    g1 = gg[1, 1]  = GridLayout()
+    ax1 = Axis(g1[1,1:2], ylabel="Drug μg / ml ", ytickformat="{:.1f}", xlabel="Time / Months", yticklabelsize=20,
+    xticklabelsize=20, ylabelpadding=10, xlabelsize=20, ylabelsize=20, yticks=0:200:400, xticks=0:120:360)
+    xlims!(ax1, 0, 360)
+    ylims!(ax1, 0, 450)
     for i in 1:36
         lines!(ax1, sol.t, drugsol[i,:], color=lcmap[1])
     end 
-    ax2 = Axis3(g1[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    g2 = gg[1,2] = GridLayout()
+
+    ax2 = Axis3(g2[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax2)
     hidespines!(ax2)
     plot_roi!(nodes, drugsol[:,end] ./ maximum(drugsol), cmap)
-    ax3 = Axis3(g1[1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    ax3 = Axis3(g2[1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax3)
     hidespines!(ax3)
     plot_roi!(nodes, drugsol[:,end] ./ maximum(drugsol), cmap)
 
-    Colorbar(g1[:, 4], limits = (0, 1), colormap = cmap, ticklabelsize=25, vertical=true, flipaxis=true)
+    cb = Colorbar(g2[2, 1:2], limits = (0, maximum(drugsol)), colormap = cmap, 
+                 ticklabelsize=20, vertical=false, flipaxis=false, ticks=0:200:400, label="Drug μg / ml", labelsize=20)
+    cb.alignmode = Mixed(left = 10, right = 10 , )
 
-    g = [f[1 + i, 1] = GridLayout() for i in 1:3]
+    g = [f[1 + i, 1:2] = GridLayout() for i in 1:3]
 
     ab_col = get(abcmap, 0.75)
     tau_col = get(taucmap, 0.75)
@@ -643,7 +670,7 @@ begin
     for (i, (solt, sol, cmap, label)) in enumerate(zip([absolt, tausolt, atrsolt], 
                                                 [absol, tausol, atrsol], 
                                                 [abcmap, taucmap, atrcmap],
-                                                ["Aβ", "Tau", "Atr."]))
+                                                ["Aβ Conc.", "Tau Conc.", "Atr."]))
 
         ax = GLMakie.Axis(g[i][1:2,1],
                 xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
@@ -658,16 +685,16 @@ begin
         end
         # hidexdecorations!(ax, ticks=false, grid=false)
         GLMakie.ylims!(ax, 0., 1.)
-        GLMakie.xlims!(ax, 0, 300)
+        GLMakie.xlims!(ax, 0, 360)
         for i in 1:36
             lines!(placebo_sol.t, sol[i, :], linewidth=2.0, color=alphacolor(get(cmap, 0.75), 0.5))
         end
 
-        ax = Axis3(g[i][1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        ax = Axis3(g[i][1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, solt, cmap)
-        ax = Axis3(g[i][2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        ax = Axis3(g[i][2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, solt, cmap)
@@ -686,7 +713,7 @@ begin
 
         ax = GLMakie.Axis(g[i][1:2,3],
                 xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
-                xticklabelsize = 25, xticks = 0:100:300, xticksize=10,
+                xticklabelsize = 25, xticks = 0:120:360, xticksize=10,
                 xlabel="Time / Months", xlabelsize = 25,
                 yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
                 yticklabelsize = 25, yticksize=10,
@@ -697,27 +724,27 @@ begin
         end
         hideydecorations!(ax, grid=false, ticks=false)
         GLMakie.ylims!(ax, 0., 1.)
-        GLMakie.xlims!(ax, 0, 300)
+        GLMakie.xlims!(ax, 0, 360)
         for i in 1:36
             lines!(placebo_sol.t, sol[i, :], linewidth=2.0, color=alphacolor(get(cmap, 0.75), 0.5))
         end
 
-        ax = Axis3(g[i][1,4], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        ax = Axis3(g[i][1,4], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, solt, cmap)
-        ax = Axis3(g[i][2,4], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        ax = Axis3(g[i][2,4], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, solt, cmap)
 
         Colorbar(g[i][1:2, 5], limits = (0.0, 1.0), colormap = cmap,
-        vertical = true, labelsize=20, flipaxis=true, ticks=collect(0:0.5:1),
+        vertical = true, labelsize=20, flipaxis=true, ticks=collect(0:0.2:1),
         ticksize=10, ticklabelsize=20, labelpadding=10)
     
     end
     
-    colsize!(g1, 1, 500)
+    colsize!(gg, 1, 600)
     rowsize!(f.layout, 1, 200)
     [colsize!(_g, 1, 300) for _g in g]
     [colsize!(_g, 3, 300) for _g in g]
@@ -728,4 +755,4 @@ begin
 
     f
 end
-save(projectdir("output/plots/pkpd/atn-pkpd-all.jpeg"), f)  
+save(projectdir("output/plots/pkpd/atn-pkpd-all.jpeg"), f)

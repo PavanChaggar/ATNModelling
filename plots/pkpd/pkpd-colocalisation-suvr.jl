@@ -85,12 +85,11 @@ atn_pkpd = make_atn_pkpd_model(fbb_u0[1:36], fbb_ui[1:36], v0[1:36], part[1:36],
 # ts = range(0, 240, 480)
 ts = range(0, 360, 720)
 
-amyloid_production = 0.35 / 12
-tau_transport = 0.06 / 12
-tau_production = 0.2 /12
+amyloid_production = 0.24 / 12
+tau_transport = 0.03 / 12
+tau_production = 0.1 / 12
 coupling = 3.2258211441306877
-atrophy = 0.1 / 12
-
+atrophy = 0.08 / 12
 drug_concentration = 100.
 drug_transport = 0.5 / 12
 drug_effect = 0.0 / 12
@@ -133,7 +132,7 @@ tau_seed_idx = zeros(36, size(sol,2))
 tau_seed_idx[tau_seed] .= 1.0
 # heatmap(tau_seed_idx)
 
-ab_seed = findall(x -> x >= 0.75, absol)
+ab_seed = findall(x -> x >= 0.88, absol)
 ab_seed_idx = zeros(36, size(sol,2))
 ab_seed_idx[ab_seed] .= 1.0
 # heatmap(ab_seed_idx)

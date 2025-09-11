@@ -25,7 +25,7 @@ right_subcortex = filter(x -> get_hemisphere(x) == "right", subcortex)
 
 dktnames = get_dkt_names(cortex)
 right_cortex = filter(x -> get_hemisphere(x) == "right", cortex)
-
+left_cortex = filter(x -> get_hemisphere(x) == "left", cortex)
 # Amyloid data 
 _ab_data_df =  CSV.read(datadir("ADNI/2025/UCBERKELEY_AMY_6MM_28Jul2025.csv"), DataFrame)
 _tau_data_df = CSV.read(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025-Ab-tau-Status.csv"), DataFrame) 
@@ -38,8 +38,7 @@ fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COM
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
 tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 0, tau_data_df);
 tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
-
-pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-ind-beta-1x1000.jls"));
+tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-1std.csv")) |> vec
 pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
 meanpst = mean(pst)
 # --------------------------------------------------------------------------------
@@ -50,38 +49,43 @@ normalise!(ab_suvr, fbb_u0, fbb_ui)
 ab_conc = map(x -> conc.(x, fbb_u0, fbb_ui), ab_suvr)
 ab_inits = [d[:,1] for d in ab_conc]
 
-mean_ab_init = mean(ab_inits)
+_mean_ab_init = mean(ab_inits)
+_mean_ab_init_sym = (_mean_ab_init[1:36] .+ _mean_ab_init[37:end]) ./ 2
+mean_ab_init = [_mean_ab_init_sym; _mean_ab_init_sym]
 
 max_norm(c) =  c ./ maximum(c);
 
-begin
-    GLMakie.activate!()
-    cmap = ColorSchemes.viridis
-    val = mean_ab_init[1:36]
-    f = Figure(size = (600, 350), figure_padding = 20, fontsize=25)
-    ax = Axis3(f[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-    hidedecorations!(ax); hidespines!(ax)
-    plot_roi!(get_node_id.(right_cortex), max_norm(val) , cmap)
+# begin
+#     GLMakie.activate!()
+#     cmap = ColorSchemes.viridis
+#     val = mean_ab_init[1:36]
+#     f = Figure(size = (600, 350), figure_padding = 20, fontsize=25)
+#     ax = Axis3(f[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+#     hidedecorations!(ax); hidespines!(ax)
+#     plot_roi!(get_node_id.(right_cortex), max_norm(val) , cmap)
     
-    ax = Axis3(f[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-    hidedecorations!(ax); hidespines!(ax)
-    plot_roi!(get_node_id.(right_cortex), max_norm(val), cmap)
-    Colorbar(f[2, 1:2], colormap=cmap, limits=(0,0.5), ticks=0:0.1:0.5,
-             ticklabelsize=20, ticksize=10, label="Concentration", vertical = false, flipaxis = false)
-    # f
-end
-save(projectdir("output/plots/colocalisation/mean_ab_aptn.jpeg"), f, px_per_unit=2.0)
+#     ax = Axis3(f[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
+#     hidedecorations!(ax); hidespines!(ax)
+#     plot_roi!(get_node_id.(right_cortex), max_norm(val), cmap)
+#     Colorbar(f[2, 1:2], colormap=cmap, limits=(0,0.5), ticks=0:0.1:0.5,
+#              ticklabelsize=20, ticksize=10, label="Concentration", vertical = false, flipaxis = false)
+#     # f
+# end
+# save(projectdir("output/plots/colocalisation/mean_ab_aptn.jpeg"), f, px_per_unit=2.0)
 
 tau_suvr = calc_suvr.(tau_data)
-vi = part .+ (3.2258211441306877 .* (fbb_ui .- fbb_u0))
-
+vi = part .+ (3.2258211441306877.* (fbb_ui .- fbb_u0))
 normalise!(tau_suvr, v0, vi)
 tau_conc = map(x -> conc.(x, v0, vi), tau_suvr)
 tau_inits = [d[:,1] for d in tau_conc]
 
-mean_tau_init = mean(tau_inits)
-filtered_tau_idx = findall(x -> x < 0.025, mean_tau_init)
-mean_tau_init[filtered_tau_idx] .= 0
+_mean_tau_init = mean(tau_inits)
+# tau_cutoffs = fill(0.05, 72)
+idx = _mean_tau_init .< conc.(tau_cutoffs, v0, vi)
+# idx = _mean_tau_init .< tau_cutoffs
+_mean_tau_init[idx] .= 0
+_mean_tau_init_sym = maximum.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
+mean_tau_init = [_mean_tau_init_sym; _mean_tau_init_sym]
 
 # begin
 #     GLMakie.activate!()
@@ -135,10 +139,11 @@ mean_tau_init[filtered_tau_idx] .= 0
 # Modelling!
 # --------------------------------------------------------------------------------
 hem_idx = 1:36
-atn_model = make_scaled_atn_model_hemisphere((fbb_ui .- fbb_u0)[hem_idx], (part .- v0)[hem_idx], L[hem_idx,hem_idx])
+atn_model = make_scaled_atn_model((fbb_ui .- fbb_u0)[hem_idx], (part .- v0)[hem_idx], L[hem_idx,hem_idx])
 
 inits = [mean_ab_init[hem_idx]; mean_tau_init[hem_idx]; zeros(36)]
-params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], 3.2258211441306877, meanpst[:Em, :mean]
+params = [0.35, 0.05, 0.2, 3.2258211441306877, 0.1]
+# params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], 3.2258211441306877, meanpst[:Em, :mean]
 
 sol = simulate(atn_model, inits, (0, 200), params, saveat=0.01)
 
@@ -325,8 +330,8 @@ begin
     Label(g2[1, 1], "Concentration", fontsize=25, rotation=pi/2, tellheight=false)
 
     # coloc order 
-    right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0175/colocalisation-inits-order-right.csv"), DataFrame)
-    left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0175/colocalisation-inits-order-left.csv"), DataFrame)
+    right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/00674/colocalisation-inits-order-right.csv"), DataFrame)
+    left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/00674/colocalisation-inits-order-left.csv"), DataFrame)
     # df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-all.csv"), DataFrame)
     # left_df = filter(x -> x.Hemisphere == "left", df)
     # right_df = filter(x -> x.Hemisphere == "right", df)
@@ -359,9 +364,9 @@ begin
     cb.alignmode = Mixed(left = 50, right = 50 )
 
     # coloc prob 
-    right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0175/colocalisation-inits-prob-right.csv"), DataFrame)
-    left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0175/colocalisation-inits-prob-left.csv"), DataFrame)
-    df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0175/colocalisation-inits-prob-all.csv"), DataFrame)
+    right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/00674/colocalisation-inits-prob-right.csv"), DataFrame)
+    left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/00674/colocalisation-inits-prob-left.csv"), DataFrame)
+    df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/00674/colocalisation-inits-prob-all.csv"), DataFrame)
     # left_df = filter(x -> x.Hemisphere == "left", df)
     # right_df = filter(x -> x.Hemisphere == "right", df)
     cmap = ColorSchemes.viridis
@@ -404,7 +409,7 @@ begin
     
     f
 end
-save(projectdir("output/plots/colocalisation/colocalisation.jpeg"), f)
+save(projectdir("output/plots/colocalisation/colocalisation-00674.jpeg"), f)
 
 # late tables 
 using PrettyTables, CSV, DataFrames, DrWatson

@@ -172,7 +172,9 @@ bf_tau_inits = [d[:,1] for d in bf_tau_suvr]
 
 bf_tau_pos_vol = get_vol.(bf_tau)
 bf_tau_pos_icv = [filter(x -> x.sid == "BF" * string(get_id(tau)) && x.tau_pet_date ∈ get_dates(tau), bf_data_df).icv_mm3 for tau in bf_tau]
-allequal(length.(bf_tau_pos_icv) .== size.(calc_suvr.(bf_tau), 2))
+dates = [filter(x -> x.sid == "BF" * string(get_id(tau)) && x.tau_pet_date ∈ get_dates(tau), bf_data_df).tau_pet_date for tau in bf_tau]
+@assert allequal(reduce(vcat, [d .== d1 for (d, d1) in zip(dates, get_dates.(bf_tau))]))
+@assert allequal(length.(bf_tau_pos_icv) .== size.(calc_suvr.(bf_tau), 2))
 bf_total_vol_norm = [ v ./ t' for (v, t) in zip(bf_tau_pos_vol, bf_tau_pos_icv)]
 bf_vols = [clamp.(1 .- (vol ./ vol[:,1]), 0, 1) for vol in bf_total_vol_norm]
 bf_vols[1]
@@ -187,8 +189,9 @@ sol = solve(bf_prob, Tsit5())
 # --------------------------------------------------------------------------------
 # Inference
 # --------------------------------------------------------------------------------
-adni_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-ind-beta-1x1000.jls"));
-bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-suvr-bf-fixed-beta-1x1000.jls"));
+# pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-1x1000.jls"));
+adni_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
+bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-bf-fixed-beta-lognormal-1x1000.jls"));
 # pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
 # pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-sepbeta-1x1000.jls"));
 
@@ -203,9 +206,9 @@ function get_diff(d)
     d[:,end] .- d[:,1]
 end
 
-linearmodel(x, p) = part .+ p[1] .* x
+linearmodel(x, p) = bf_part .+ p[1] .* x
 fbp_fitted_model = curve_fit(linearmodel, fbp_ui .- fbp_u0, ftp_vi, [1.0])
-println("params = $(fbp_fitted_model.param)")
+# println("params = $(fbp_fitted_model.param)")
 
 
 bf_fitted_model = curve_fit(linearmodel, bf_ui .- bf_u0, bf_vi, [1.0])
@@ -287,7 +290,7 @@ bf_meanpst = mean(bf_pst)
 
 for sub in 1:48
     p = [bf_meanpst[Symbol("α_a[$sub]"), :mean], bf_meanpst[Symbol("ρ_t[$sub]"), :mean], 
-    bf_meanpst[Symbol("α_t[$sub]"), :mean], 2.1588908582495936, 
+    bf_meanpst[Symbol("α_t[$sub]"), :mean], 2.2182243777142356, 
     bf_meanpst[Symbol("η[$sub]"), :mean]]
     
     pstprob = remake(bf_prob, u0=bf_inits[sub], p=p)
@@ -345,8 +348,8 @@ _rois = ["entorhinal", "Left-Hippocampus", "Right-Hippocampus", "Left-Amygdala",
                 "inferiortemporal", "middletemporal", "inferiorparietal", "precuneus"]
 rois = findall(x -> x ∈ _rois, get_label.(cortex))
 
-pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
-bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-suvr-bf-fixed-beta-1x1000.jls"));
+# pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-1x1000.jls"));
+# bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-suvr-bf-fixed-beta-1x1000.jls"));
 braak_regions = get_braak_regions()
 bs = [findall(x -> get_node_id(x) ∈ br, cortex) for br in braak_regions]
 
@@ -374,21 +377,21 @@ begin
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
         CairoMakie.xlims!(ax, 0.0,0.5)
-        hist!(vec(Array(pst[:Am_a])), bins=15, color=alphacolor(get(abcmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        hist!(vec(Array(adni_pst[:Am_a])), bins=15, color=alphacolor(get(abcmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         hidexdecorations!(ax, grid=false, ticks=false)
     
         ax = Axis(g1[1,2], xticks=0:0.04:0.08,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="ρ \n tau transport", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
         xlims!(ax, 0.0,0.1)
-        hist!(vec(Array(pst[:Pm_t])), bins=15, color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        hist!(vec(Array(adni_pst[:Pm_t])), bins=15, color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         hidexdecorations!(ax, grid=false, ticks=false)
     
         ax = Axis(g1[1,3],  xticks=0:0.05:0.1,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="γ \n tau production", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
         xlims!(ax, 0.0,0.125)
-        hist!(vec(Array(pst[:Am_t])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        hist!(vec(Array(adni_pst[:Am_t])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         hidexdecorations!(ax, grid=false, ticks=false)
     
     
@@ -400,12 +403,12 @@ begin
         # hist!(vec(Array(pst[:β_fbp])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         # hidexdecorations!(ax, grid=false, ticks=false)
     
-        ax = Axis(g1[1,5], xticks=0.0:0.05:0.1,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="η \n atrophy rate", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
+        ax = Axis(g1[1,4], xticks=0.0:0.05:0.1,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="η \n atrophy rate", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
         hidexdecorations!(ax, grid=false, ticks=false)
         xlims!(ax, 0.0,0.125)
-        hist!(vec(Array(pst[:Em])), bins=15, color=alphacolor(get(atrcmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        hist!(vec(Array(adni_pst[:Em])), bins=15, color=alphacolor(get(atrcmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         colgap!(f.layout, 20)
     
     
@@ -419,7 +422,7 @@ begin
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
         xlims!(ax, 0.0,0.1)
-        hist!(vec(Array(bf_pst[:Pm_t])), bins=15, color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        hist!(vec(Array(bf_pst[:Pm_t])), bins=25, color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         
         ax = Axis(g1[2,3],  xticks=0:0.05:0.3, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
         hidespines!(ax, :l, :t, :r)
@@ -433,7 +436,7 @@ begin
         # xlims!(ax, 3,8.5)
         # hist!(vec(Array(bf_pst[:β])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
     
-        ax = Axis(g1[2,5], xticks=0.0:0.05:0.1, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+        ax = Axis(g1[2,4], xticks=0.0:0.05:0.1, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
         xlims!(ax, 0.0,0.125)
@@ -445,7 +448,7 @@ begin
 
         for (i, df) in enumerate([adni_results, bf_results])
                 start = 0.5
-                stop = 1.5
+                stop = 2.0
                 border = 0.05
                 ax1 = CairoMakie.Axis(g2[i,1],  
                         xlabel="Prediction", 
@@ -470,20 +473,20 @@ begin
                         ylabel="Observation", 
                         titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
                         xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
-                        xticks=start:0.15:stop, yticks=start:0.15:stop, 
+                        xticks=start:0.2:stop, yticks=start:0.2:stop, 
                         xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
                         xtickformat = "{:.1f}", ytickformat = "{:.1f}")
                 hideydecorations!(ax2, grid=false, ticks=false, ticklabels=false)
                 if i == 1
                         hidexdecorations!(ax2, grid=false, ticks=false, )
                 end
-                CairoMakie.xlims!(ax2, start, stop + border)
-                CairoMakie.ylims!(ax2, start, stop + border)
+                CairoMakie.xlims!(ax2, start - border, stop + border)
+                CairoMakie.ylims!(ax2, start - border, stop + border)
                 lines!(start:0.01:stop+border, start:0.01:stop+border, color=(:grey, 1.0), linewidth=5, linestyle=:dash)
 
                 start = -0.0
-                stop = 0.25
-                border = 0.01
+                stop = 0.20
+                border = 0.02
                 ax3= CairoMakie.Axis(g2[i,3],  
                         xlabel="Prediction", 
                         ylabel="Observation", 
@@ -502,13 +505,13 @@ begin
 
                 start = 0.0
                 stop = 0.2
-                border = 0.03
+                border = 0.02
                 ax4 =CairoMakie.Axis(g2[i,4],  
                         xlabel="Δ Prediction", 
                         ylabel="Δ Observation", 
                         titlesize=titlesize, xlabelsize=xlabelsize, ylabelsize=ylabelsize, 
                         xticklabelsize=xticklabelsize, yticklabelsize=xticklabelsize,
-                        xticks=start:0.2:stop, yticks=start:0.2:stop, 
+                        xticks=start:0.1:stop, yticks=start:0.1:stop, 
                         xgridcolor=RGBAf(0, 0, 0, 0.15), ygridcolor=RGBAf(0, 0, 0, 0.15),
                         xtickformat = "{:.1f}", ytickformat = "{:.1f}")
                 if i == 1
@@ -594,7 +597,7 @@ begin
         Label(g2[1, 1, TopLeft()], "B", fontsize = 40, font = :bold, padding = (-50, 0, 0, -80), halign = :center, tellheight=false, tellwidth=false)
         f
 end
-save(projectdir("output/plots/inference-results/pst-pstpred-harmonised-scaled-adni-bf.pdf"),f)
+save(projectdir("output/plots/inference/pst-pstpred-harmonised-suvr-adni-bf.pdf"),f)
 
 # begin
 #     cmap = Makie.wong_colors();
