@@ -32,11 +32,13 @@ dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 using Serialization
 pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
 pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-sepbeta-1x1000.jls"));
+pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-1x1000.jls"));
+
 meanpst = mean(pst)
-mean([meanpst["α_a[$i]", :mean] for i in 1:34])
-mean([meanpst["ρ_t[$i]", :mean] for i in 1:34])
-mean([meanpst["α_t[$i]", :mean] for i in 1:34])
-mean([meanpst["η[$i]", :mean] for i in 1:34])
+mean([meanpst["α_a[$i]", :mean] for i in 1:18])
+mean([meanpst["ρ_t[$i]", :mean] for i in 1:18])
+mean([meanpst["α_t[$i]", :mean] for i in 1:18])
+mean([meanpst["η[$i]", :mean] for i in 1:18])
 
 tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-1std.csv")) |> vec
 
@@ -46,16 +48,30 @@ tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/ta
 _ab_data_df =  CSV.read(datadir("ADNI/2025/UCBERKELEY_AMY_6MM_28Jul2025.csv"), DataFrame)
 _tau_data_df = CSV.read(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025-Ab-tau-Status.csv"), DataFrame) 
 
+# tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
+# tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 0, tau_data_df);
+# tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
+# IDS = unique(tau_pos_df.RID)
+
+# tracer="FBB"
+
+# fbb_u0, fbb_ui = load_ab_params(tracer=tracer)
+# fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.RID ∈ IDS, _ab_data_df)
+# fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COMPOSITE_REF")
+
+
 tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
 tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 0, tau_data_df);
-tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
-IDS = unique(tau_pos_df.RID)
+_tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
+tau_subs = get_id.(_tau_data)
 
 tracer="FBB"
-
 fbb_u0, fbb_ui = load_ab_params(tracer=tracer)
-fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.RID ∈ IDS, _ab_data_df)
+# fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.AMYLOID_STATUS_COMPOSITE_REF == 1 && x.RID ∈ tau_subs && x.CENTILOIDS < 67, _ab_data_df);
+fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.AMYLOID_STATUS_COMPOSITE_REF == 1 && x.RID ∈ tau_subs && x.CENTILOIDS < 67, _ab_data_df);
 fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COMPOSITE_REF")
+
+tau_data = filter(x -> get_id(x) ∈ get_id.(fbb_data), _tau_data)
 
 fbb_suvr = calc_suvr.(fbb_data)
 normalise!(fbb_suvr, fbb_u0, fbb_ui)
@@ -65,7 +81,7 @@ mean_fbb_init = mean(fbb_inits)[1:36]
 println("ab concentration = $(mean_fbb_init[29])")
 
 fbb_tau_suvr = calc_suvr.(tau_data)
-vi = part .+ (4.785056961885778 .* (fbb_ui .- fbb_u0))
+vi = part .+ (meanpst["β_fbb",:mean] .* (fbb_ui .- fbb_u0))
 # vi = part .+ (4.5.* (fbb_ui .- fbb_u0))
 normalise!(fbb_tau_suvr, v0, vi)
 fbb_tau_conc = map(x -> conc.(x, v0, vi), fbb_tau_suvr)
@@ -80,7 +96,7 @@ println("tau concentration = $(mean_tau_init[29])")
 scatter(mean_tau_init)
 
 vol_init = zeros(36)
-tmax = 240
+tmax = 360
 ts = range(0, tmax, tmax * 2)
 # ts = range(0, 360, 720)
 # amyloid_production = 0.37 / 12
@@ -89,11 +105,11 @@ ts = range(0, tmax, tmax * 2)
 # coupling = 3.2258211441306877
 # atrophy = 0.1 / 12
 
-amyloid_production = 0.35 / 12
-tau_transport = 0.05 / 12
+amyloid_production = 0.37 / 12
+tau_transport = 0.07 / 12
 tau_production = 0.12 / 12
-coupling = 4.785056961885778
-atrophy = 0.14 / 12
+coupling = meanpst["β_fbb",:mean]
+atrophy = 0.15 / 12
 
 # amyloid_production = meanpst[:Am_a, :mean] / 12
 # tau_transport = meanpst[:Pm_t, :mean] / 12
@@ -112,7 +128,7 @@ atrophy = 0.14 / 12
 drug_concentration = 100.
 drug_transport = 0.5 / 12
 drug_effect = 0.0 / 12
-drug_clearance = 0.5 / 12
+drug_clearance = 0.1 / 12
 
 L = laplacian_matrix(c) 
 Δ = part .+ (coupling .* (fbb_ui .- fbb_u0))
@@ -144,8 +160,8 @@ begin
         lines!(ax1, sol.t, absol[i, :])
         lines!(ax2, sol.t, tausol[i, :])
     end
-    lines!(ax2, sol.t, tausol[29, :], linewidth=5)
-    lines!(ax1, sol.t, absol[29, :], linewidth=5)
+    lines!(ax2, sol.t, tausol[35, :], linewidth=5)
+    lines!(ax1, sol.t, absol[35, :], linewidth=5)
     scatter!(ax3, tausol[:, 1])
     scatter!(ax3, absol[:, 1])
     f
@@ -154,16 +170,18 @@ end
 atrsol = Array(sol[73:108,:])
 drugsol = Array(sol[109:144,:]) ./ maximum(Array(sol[109:144,:]))
 
-tau_seed = findall(x -> x >= 0.075, tausol)
-tau_seed_idx = zeros(36, size(sol,2))
-tau_seed_idx[tau_seed] .= 1.0
-# tau_seed_idx = tausol .>= tau_threshold[1:36]
+# tau_seed = findall(x -> x >= 0.09, tausol)
+# tau_seed_idx = zeros(36, size(sol,2))
+# tau_seed_idx[tau_seed] .= 1.0
+tau_seed_idx = tausol .>= tau_threshold[1:36];
 # heatmap(tau_seed_idx)
-
-ab_seed = findall(x -> x >= 0.79, absol)
-ab_seed_idx = zeros(36, size(sol,2))
-ab_seed_idx[ab_seed] .= 1.0
-# ab_seed_idx = absol .>= ab_threshold[1:36]
+cortical_idx = setdiff(collect(1:36), [27, 35, 36])
+tau_t = findfirst(x -> x > 0, tau_seed_idx[cortical_idx,:])
+sol.t[tau_t[2]]
+# ab_seed = findall(x -> x >= 0.79, absol)
+# ab_seed_idx = zeros(36, size(sol,2))
+# ab_seed_idx[ab_seed] .= 1.0
+ab_seed_idx = absol .>= ab_threshold[1:36];
 # heatmap(ab_seed_idx)
 
 ab_tau_coloc = tau_seed_idx .* ab_seed_idx
@@ -177,10 +195,10 @@ bs = get_braak_regions()
 rbs = [filter(x -> x < 42, b) for b in bs]
 b3 = reduce(vcat, rbs[1:3])
 rois = findall(x -> get_node_id(x) ∈ b3, cortex)
- 
-vol_rois = ["entorhinal", "Left-Hippocampus", "Right-Hippocampus", "Left-Amygdala", "Right-Amygdala",
-"inferiortemporal", "middletemporal", "inferiorparietal", "precuneus"]
-rois = findall(x -> x ∈ vol_rois, get_label.(cortex))
+dktnames[rois]
+# vol_rois = ["entorhinal", "Left-Hippocampus", "Right-Hippocampus", "Left-Amygdala", "Right-Amygdala",
+# "inferiortemporal", "middletemporal", "inferiorparietal", "precuneus"]
+# rois = findall(x -> x ∈ vol_rois, get_label.(cortex))
 
 ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
 tau_c = sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5);
@@ -238,19 +256,18 @@ for (i, t) in enumerate(int_ts)
     push!(drugsols, Array(sol[109:144,:]))    
 end
 
-# for sol in sols
-begin
-    CairoMakie.activate!()
-    f = Figure()
-    ax = Axis(f[1,1])
-    ylims!(ax, 0, 1)
-    plot!(sols[1], idxs=1:36)
-    ax = Axis(f[2,1])
-    # ylims!(ax, 0, 1)
-    xlims!(ax, 0, 50)
-    plot!(sols[1], idxs=108:144)
-    display(f)
-end
+# begin
+#     CairoMakie.activate!()
+#     f = Figure()
+#     ax = Axis(f[1,1])
+#     ylims!(ax, 0, 1)
+#     plot!(sols[1], idxs=1:36)
+#     ax = Axis(f[2,1])
+#     # ylims!(ax, 0, 1)
+#     xlims!(ax, 0, 50)
+#     plot!(sols[1], idxs=108:144)
+#     display(f)
+# end
 # end
 
 begin
@@ -275,7 +292,7 @@ begin
     xlims!(ax3, 0.0, tmax)
     # hidexdecorations!(ax3, grid=false)
     ax4 = Axis(g1[1:2,1], ylabel="Drug\nμg / ml", ytickformat="{:.0f}", xlabel="Time / months", ylabelsize=20, xlabelsize=20, xticks=0:24:tmax)
-    ylims!(ax4, 0.0, 250.)
+    ylims!(ax4, 0.0, 350.)
     xlims!(ax4, 0.0, tmax)
     hidexdecorations!(ax4, grid=false)
    
@@ -315,6 +332,7 @@ begin
     # cb.alignmode = Mixed(right = 0)
     cb.alignmode = Mixed(left = 15, right = 15 , top=-10)
 
+    cmap = ColorSchemes.Blues
     ax = Axis(g3[1,1], xlabel="Tau", ylabel="Atr.", xlabelsize=25, ylabelsize=25 )
     # xlims!(ax, 0.4, 1.0)
     # ylims!(ax, 0, 0.7)
@@ -324,18 +342,24 @@ begin
         linesegments!([0, tau_end[i]], [atr_end[i], atr_end[i]], linestyle=:dash, color=(:grey, 0.75))
         linesegments!([tau_end[i], tau_end[i]], [0, atr_end[i]], linestyle=:dash, color=(:grey, 0.75))
     end
-    sc = scatter!(tau_end, atr_end)
+    cls = LinRange(0.4, 1.0, length(tau_end))
+    
+    sc = scatter!(tau_end, atr_end, color=[get(cmap, c) for c in cls])
     # scatter!(noab_tau, noab_atr)
     ax.alignmode = Mixed(left = 0, right = 0)
 
     ax = Axis(g3[1,2], xlabel="t0 / months", ylabel="Δ", xlabelsize=20, ylabelsize=20,xticks=collect(0:60:tmax))
 
     _ts = collect(12:12:tmax)
+    cls = LinRange(0.4, 1.0, length(_ts))
+    
     atr_diffs = [atr_end[i + 2] - atr_end[i + 1] for i in 0:length(_ts)-1]
     tau_diffs = [tau_end[i + 2] - tau_end[i + 1] for i in 0:length(_ts)-1]
-    scatter!(ax, _ts, atr_diffs, label="Atr")
-    scatter!(ax, _ts, tau_diffs, label="Tau")
     vlines!(sol.t[coloc_t[1][2]], linestyle=:dash, color=:black, linewidth=2.5)
+    vlines!(sol.t[tau_t[2]], linestyle=:dash, color=:red, linewidth=2.5)
+    
+    scatter!(ax, _ts, atr_diffs, label="Atr", color=[get(cmap, c) for c in cls], marker=:utriangle, markersize=12)
+    scatter!(ax, _ts, tau_diffs, label="Tau", color=[get(cmap, c) for c in cls], markersize=12)
 
     ax.alignmode = Mixed(left = 0, right = 15)
     axislegend(ax, unique=true, position=:rt,  framevisible=false, fontsize=100, patchsize=(20,20))
@@ -374,18 +398,24 @@ begin
     # ax_init_1 = Axis3(g[4][1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
     # hidedecorations!(ax_init_1)
     # hidespines!(ax_init_1)
-    linestyles = [:solid, :dash, :dashdot, :dashdotdot, :dot]
-    labels = ["t0 = 0", "t0 = 60","t0 = 120","t0 = 240","Placebo"]
-    solidx = [1, 5, 11, 17, 21]
-    for (_absol, _tausol, _atrsol, _drugsol, ls, label) in zip(absols[solidx], tausols[solidx], atrsols[solidx], drugsols[solidx], reverse(linestyles), labels)
+    cols = Makie.wong_colors()[1:5]
+    
+    labels = ["t0 = 0", "t0 = 48","t0 = 120","t0 = 240","Placebo"]
+    solidx = [1, 5, 11, 21, 31]
+    # solidx = [1, 5, 11, 15, 21], 31]
+    for (i, (_absol, _tausol, _atrsol, _drugsol, label)) in enumerate(zip(absols[solidx], tausols[solidx], atrsols[solidx], drugsols[solidx], labels))
         absol = vec(mean(_absol[rois,:], dims=1))
         tausol = vec(mean(_tausol[rois,:], dims=1))
         atrsol = vec(mean(_atrsol[rois,:], dims=1))
         drugsol = vec(mean(_drugsol[rois,:], dims=1)) 
-        lines!(ax1, sol.t, vec(absol), linewidth=3, linestyle = (ls), color=get(abcmap, maximum(absol)))
-        lines!(ax2, sol.t, vec(tausol), linewidth=3, linestyle = (ls), color=get(taucmap, maximum(tausol)))
-        lines!(ax3, sol.t, vec(atrsol), linewidth=3, linestyle = (ls), color=get(atrcmap, maximum(atrsol)/0.5))
-        lines!(ax4, sol.t, vec(drugsol), linewidth=3, linestyle = (ls), color=get(taucmap, 0.8) , label = label)
+        lines!(ax1, sol.t, vec(absol), linewidth=3, color=get(cmap, ((i-1)/(4/0.6))+0.4))
+        lines!(ax2, sol.t, vec(tausol), linewidth=3, color=get(cmap, ((i-1)/(4/0.6))+0.4))
+        lines!(ax3, sol.t, vec(atrsol), linewidth=3, color=get(cmap, ((i-1)/(4/0.6))+0.4))
+        lines!(ax4, sol.t, vec(drugsol), linewidth=3, color=get(cmap, ((i-1)/(4/0.6))+0.4) , label = label)
+        # lines!(ax1, sol.t, vec(absol), linewidth=3, linestyle = (ls), color=get(abcmap, maximum(absol)))
+        # lines!(ax2, sol.t, vec(tausol), linewidth=3, linestyle = (ls), color=get(taucmap, maximum(tausol)))
+        # lines!(ax3, sol.t, vec(atrsol), linewidth=3, linestyle = (ls), color=get(atrcmap, maximum(atrsol)/0.5))
+        # lines!(ax4, sol.t, vec(drugsol), linewidth=3, linestyle = (ls), color=get(taucmap, 0.8) , label = label)
     end
     # le = [LineElement(color = :black, linestyle = ls) for ls in reverse(linestyles)]
     # Le = Legend(g1[5, 1], le, labels, nbanks=5, framevisible=false, tellheight=false)
@@ -443,7 +473,7 @@ begin
     display(fig)
     
 end
-save(projectdir("output/plots/pkpd/coloc-pkpd.jpeg"), fig)
+save(projectdir("output/plots/pkpd/coloc-pkpd-360-tau-time.jpeg"), fig)
 
 t0s = collect(0:24:240)
 int_ts[solidx]

@@ -31,14 +31,16 @@ dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 
 using Serialization
 pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
-# pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-sepbeta-1x1000.jls"));
+pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-sepbeta-1x1000.jls"));
+pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-1x1000.jls"));
+
 meanpst = mean(pst)
 mean([meanpst["α_a[$i]", :mean] for i in 1:34])
 mean([meanpst["ρ_t[$i]", :mean] for i in 1:34])
 mean([meanpst["α_t[$i]", :mean] for i in 1:34])
 mean([meanpst["η[$i]", :mean] for i in 1:34])
 
-tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-2std.csv")) |> vec
+tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-1std.csv")) |> vec
 
 # --------------------------------------------------------------------------------
 # Load data
@@ -65,7 +67,7 @@ mean_fbb_init = mean(fbb_inits)[1:36]
 println("ab concentration = $(mean_fbb_init[29])")
 
 fbb_tau_suvr = calc_suvr.(tau_data)
-vi = part .+ (3.2258211441306877 .* (fbb_ui .- fbb_u0))
+vi = part .+ (meanpst["β_fbb",:mean] .* (fbb_ui .- fbb_u0))
 # vi = part .+ (4.5.* (fbb_ui .- fbb_u0))
 normalise!(fbb_tau_suvr, v0, vi)
 fbb_tau_conc = map(x -> conc.(x, v0, vi), fbb_tau_suvr)
@@ -79,35 +81,22 @@ mean_tau_init = maximum.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
 println("tau concentration = $(mean_tau_init[29])")
 scatter(mean_tau_init)
 
-# vol_init = zeros(36)
+vol_init = zeros(36)
 
 # cingulate = findall(x -> contains(get_label(x), "cingulate"), cortex)
 # m = zeros(36)
 # m[cingulate] .= 1
 # m[[35,36]] .= 1
 
-amyloid_production = 0.35 / 12
+amyloid_production = 0.34/ 12
 tau_transport = 0.05 / 12
-tau_production = 0.2 / 12
-coupling = 3.2258211441306877
-atrophy = 0.1 / 12
-drug_concentration = 100.
-drug_transport = 0.5 / 12
+tau_production = 0.12 / 12
+coupling = meanpst["β_fbb",:mean]
+atrophy = 0.14 / 12
+drug_concentration = 400.
+drug_transport = 1.5 / 12
 drug_effect = 0.1 / 12
-drug_clearance = 0.5 / 12
-# amyloid_production = 0.2
-# tau_transport = 0.01 
-# tau_production = 0.04 
-# coupling = 4.5 
-# atrophy = 0.05 
-# drug_concentration = 10.
-# drug_transport = 0.1
-# drug_effect = 0.0
-# drug_clearance = 0.1
-
-# tau_init = zeros(36)
-# tau_init[27] = 0.2
-
+drug_clearance = 5. / 12
 ts = range(0,  360, 600)
 # ts = range(0, 180, 480)
 
@@ -171,6 +160,152 @@ begin
 end
 
 using GLMakie
+ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
+tau_c = sequential_palette(240, s = 0.9, c = 0.9, w =0.25, b = 0.5);
+atr_c = sequential_palette(15, s = 0.9, c = 0.9, w =0.25, b = 0.5);
+
+abcmap = ColorScheme(ab_c);
+taucmap = ColorScheme(tau_c); #reverse(ColorSchemes.RdYlBu);
+atrcmap = ColorScheme(atr_c); #ColorSchemes.Reds;
+
+begin
+    GLMakie.activate!()
+    f = Figure(size=(1100, 900), figure_padding=(20,20,20,20))
+    nodes = get_node_id.(cortex)
+    lcmap = Makie.wong_colors()
+    cmap = ColorSchemes.viridis
+
+    gg = f[1, 1:2] = GridLayout(alignmode = Mixed(
+        left = Makie.Protrusion(0),
+        right = Makie.Protrusion(0),
+        bottom = Makie.Protrusion(35),
+        top = Makie.Protrusion(10)))
+    g1 = gg[1, 1]  = GridLayout()
+    ax1 = Axis(g1[1,1:2], ylabel="Drug μg / ml ", ytickformat="{:.1f}", xlabel="Time / Months", yticklabelsize=20,
+    xticklabelsize=20, ylabelpadding=10, xlabelsize=20, ylabelsize=20, yticks=0:200:400, xticks=0:60:360)
+    xlims!(ax1, 0, 360)
+    ylims!(ax1, 0, 550)
+    for i in 1:36
+        lines!(ax1, sol.t, drugsol[i,:], color=lcmap[1])
+    end 
+    g2 = gg[1,2] = GridLayout()
+
+    ax2 = Axis3(g2[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+    hidedecorations!(ax2)
+    hidespines!(ax2)
+    plot_roi!(nodes, drugsol[:,end] ./ maximum(drugsol), cmap)
+    ax3 = Axis3(g2[1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+    hidedecorations!(ax3)
+    hidespines!(ax3)
+    plot_roi!(nodes, drugsol[:,end] ./ maximum(drugsol), cmap)
+
+    cb = Colorbar(g2[2, 1:2], limits = (0, maximum(drugsol)), colormap = cmap, 
+                 ticklabelsize=20, vertical=false, flipaxis=false, ticks=0:200:400, label="Drug μg / ml", labelsize=20)
+    cb.alignmode = Mixed(left = 10, right = 10 , )
+
+    g = [f[1 + i, 1:2] = GridLayout() for i in 1:3]
+
+    ab_col = get(abcmap, 0.75)
+    tau_col = get(taucmap, 0.75)
+    atr_col = get(atrcmap, 0.75)
+    
+    absolt = Array(placebo_solts[1:36,end])
+    tausolt = Array(placebo_solts[37:72,end])
+    atrsolt = Array(placebo_solts[73:108,end])
+    
+    absol = Array(placebo_sol[1:36,:])
+    tausol = Array(placebo_sol[37:72,:])
+    atrsol = Array(placebo_sol[73:108,:])
+
+    for (i, (solt, sol, cmap, label)) in enumerate(zip([absolt, tausolt, atrsolt], 
+                                                [absol, tausol, atrsol], 
+                                                [abcmap, taucmap, atrcmap],
+                                                ["Aβ Conc.", "Tau Conc.", "Atr."]))
+
+        ax = GLMakie.Axis(g[i][1:2,1],
+                xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
+                xticklabelsize = 25, xticks = 0:60:360, xticksize=10,
+                xlabel="Time / Months", xlabelsize = 25,
+                yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
+                yticklabelsize = 25, yticksize=10,
+                ylabel=label, ylabelsize = 25, yticks=collect(0:0.2:1.)
+        )
+        if i < 3 
+            hidexdecorations!(ax, ticks=false, grid=false)
+        end
+        # hidexdecorations!(ax, ticks=false, grid=false)
+        GLMakie.ylims!(ax, 0., 1.)
+        GLMakie.xlims!(ax, 0, 360)
+        for i in 1:36
+            lines!(placebo_sol.t, sol[i, :], linewidth=2.0, color=alphacolor(get(cmap, 0.75), 0.5))
+        end
+
+        ax = Axis3(g[i][1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, solt, cmap)
+        ax = Axis3(g[i][2,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, solt, cmap)
+    
+    end
+
+    absolt = Array(solts[1:36,end])
+    tausolt = Array(solts[37:72,end])
+    atrsolt = Array(solts[73:108,end])
+    
+    absol = Array(sol[1:36,:])
+    tausol = Array(sol[37:72,:])
+    atrsol = Array(sol[73:108,:])
+
+    for (i, (solt, sol, cmap)) in enumerate(zip([absolt, tausolt, atrsolt], [absol, tausol, atrsol], [abcmap, taucmap, atrcmap]))
+
+        ax = GLMakie.Axis(g[i][1:2,3],
+                xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
+                xticklabelsize = 25, xticks = 0:60:360, xticksize=10,
+                xlabel="Time / Months", xlabelsize = 25,
+                yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
+                yticklabelsize = 25, yticksize=10,
+                ylabel="Conc.", ylabelsize = 25, yticks=collect(0:0.2:1.)
+        )
+        if i < 3 
+            hidexdecorations!(ax, ticks=false, grid=false)
+        end
+        hideydecorations!(ax, grid=false, ticks=false)
+        GLMakie.ylims!(ax, 0., 1.)
+        GLMakie.xlims!(ax, 0, 360)
+        for i in 1:36
+            lines!(placebo_sol.t, sol[i, :], linewidth=2.0, color=alphacolor(get(cmap, 0.75), 0.5))
+        end
+
+        ax = Axis3(g[i][1,4], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, solt, cmap)
+        ax = Axis3(g[i][2,4], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, solt, cmap)
+
+        Colorbar(g[i][1:2, 5], limits = (0.0, 1.0), colormap = cmap,
+        vertical = true, labelsize=20, flipaxis=true, ticks=collect(0:0.2:1),
+        ticksize=10, ticklabelsize=20, labelpadding=10)
+    
+    end
+    
+    colsize!(gg, 1, 600)
+    rowsize!(f.layout, 1, 200)
+    [colsize!(_g, 1, 300) for _g in g]
+    [colsize!(_g, 3, 300) for _g in g]
+
+
+    Label(g1[1, 1, TopLeft()], "A", fontsize = 30, font = :bold, padding = (10, 40, 50, 0), halign = :center, tellheight=false, tellwidth=false)
+    Label(g[1][1, 1, TopLeft()],  "B", fontsize = 30, font = :bold, padding = (0, 40, 50, 0), halign = :center, tellheight=false, tellwidth=false)
+
+    f
+end
+save(projectdir("output/plots/pkpd/atn-pkpd-all-360.jpeg"), f)
 
 begin 
     GLMakie.activate!()
@@ -359,7 +494,7 @@ begin
     g3 = f[3, 1:2] = GridLayout()
 
     ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
-    tau_c = sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5);
+    tau_c = sequential_palette(240, s = 0.9, c = 0.9, w =0.25, b = 0.5);
     atr_c = sequential_palette(15, s = 0.9, c = 0.9, w =0.25, b = 0.5);
 
     abcmap = ColorScheme(ab_c);
@@ -487,7 +622,7 @@ begin
     g3 = f[3, 3:5] = GridLayout()
 
     ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
-    tau_c = sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5);
+    tau_c = sequential_palette(240, s = 0.9, c = 0.9, w =0.25, b = 0.5);
     atr_c = sequential_palette(15, s = 0.9, c = 0.9, w =0.25, b = 0.5);
 
     abcmap = ColorScheme(ab_c);
@@ -610,14 +745,6 @@ begin
 end
 save(projectdir("output/plots/pkpd/atn-pkpd-all.jpeg"), f)
 
-ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
-tau_c = sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5);
-atr_c = sequential_palette(15, s = 0.9, c = 0.9, w =0.25, b = 0.5);
-
-abcmap = ColorScheme(ab_c);
-taucmap = ColorScheme(tau_c); #reverse(ColorSchemes.RdYlBu);
-atrcmap = ColorScheme(atr_c); #ColorSchemes.Reds;
-
 begin
     GLMakie.activate!()
     f = Figure(size=(1100, 900), figure_padding=(20,20,20,20))
@@ -713,7 +840,7 @@ begin
 
         ax = GLMakie.Axis(g[i][1:2,3],
                 xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
-                xticklabelsize = 25, xticks = 0:120:360, xticksize=10,
+                xticklabelsize = 25, xticks = 0:60:360, xticksize=10,
                 xlabel="Time / Months", xlabelsize = 25,
                 yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
                 yticklabelsize = 25, yticksize=10,

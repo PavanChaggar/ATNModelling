@@ -11,6 +11,7 @@ using DifferentialEquations
 using CSV, DataFrames, DrWatson
 using ADNIDatasets
 using Statistics
+using DelimitedFiles
 using Serialization
 # --------------------------------------------------------------------------------
 # Connectome and Data
@@ -55,24 +56,6 @@ mean_ab_init = [_mean_ab_init_sym; _mean_ab_init_sym]
 
 max_norm(c) =  c ./ maximum(c);
 
-# begin
-#     GLMakie.activate!()
-#     cmap = ColorSchemes.viridis
-#     val = mean_ab_init[1:36]
-#     f = Figure(size = (600, 350), figure_padding = 20, fontsize=25)
-#     ax = Axis3(f[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(get_node_id.(right_cortex), max_norm(val) , cmap)
-    
-#     ax = Axis3(f[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(get_node_id.(right_cortex), max_norm(val), cmap)
-#     Colorbar(f[2, 1:2], colormap=cmap, limits=(0,0.5), ticks=0:0.1:0.5,
-#              ticklabelsize=20, ticksize=10, label="Concentration", vertical = false, flipaxis = false)
-#     # f
-# end
-# save(projectdir("output/plots/colocalisation/mean_ab_aptn.jpeg"), f, px_per_unit=2.0)
-
 tau_suvr = calc_suvr.(tau_data)
 vi = part .+ (3.2258211441306877.* (fbb_ui .- fbb_u0))
 normalise!(tau_suvr, v0, vi)
@@ -87,54 +70,6 @@ _mean_tau_init[idx] .= 0
 _mean_tau_init_sym = maximum.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
 mean_tau_init = [_mean_tau_init_sym; _mean_tau_init_sym]
 
-# begin
-#     GLMakie.activate!()
-#     cmap = ColorSchemes.viridis
-#     val = mean_tau_init[1:36]
-#     f = Figure(size = (600, 350), figure_padding = 20, fontsize=25)
-#     ax = Axis3(f[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(get_node_id.(right_cortex), max_norm(val) , cmap)
-    
-#     ax = Axis3(f[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(get_node_id.(right_cortex), max_norm(val), cmap)
-#     Colorbar(f[2, 1:2], colormap=cmap, limits=(0,0.5), ticks=0:0.1:0.5,
-#              ticklabelsize=20, ticksize=10, label="Concentration", vertical = false, flipaxis = false)
-    
-# end
-# save(projectdir("output/plots/colocalisation/mean_tau_aptn.jpeg"), f, px_per_unit=2.0)
-
-
-# begin
-#     GLMakie.activate!()
-#     cmap = ColorSchemes.viridis
-    
-#     f = Figure(size = (1200, 250), figure_padding = 20, fontsize=25)
-#     val = mean_ab_init[1:36]
-#     ax = Axis3(f[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(get_node_id.(right_cortex), max_norm(val) , cmap)
-    
-#     ax = Axis3(f[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(get_node_id.(right_cortex), max_norm(val), cmap)
-
-#     val = mean_tau_init[1:36]
-#     ax = Axis3(f[1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(get_node_id.(right_cortex), max_norm(val) , cmap)
-    
-#     ax = Axis3(f[1,4], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(get_node_id.(right_cortex), max_norm(val), cmap)
-#     Colorbar(f[1, 0], colormap=cmap, limits=(0,0.5), ticks=0:0.1:0.5,
-#              ticklabelsize=20, ticksize=10, label="Concentration", vertical = true, flipaxis = false)
-#     f
-# end
-# save(projectdir("output/plots/colocalisation/mean_ab_tau_aptn.jpeg"), f, px_per_unit=2.0)
-
-
 # --------------------------------------------------------------------------------
 # Modelling!
 # --------------------------------------------------------------------------------
@@ -145,121 +80,26 @@ inits = [mean_ab_init[hem_idx]; mean_tau_init[hem_idx]; zeros(36)]
 params = [0.35, 0.05, 0.2, 3.2258211441306877, 0.1]
 # params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], 3.2258211441306877, meanpst[:Em, :mean]
 
-sol = simulate(atn_model, inits, (0, 200), params, saveat=0.01)
+sol = solve(ODEProblem(atn_model, inits, (0, 80), params), Tsit5())
 
-# begin
-#     CairoMakie.activate!()
-#     f = Figure(size = (500, 350), figure_padding = 20, fontsize=20)
-#     ax = Axis(f[1,1], xlabel="t / years", ylabel="Concentration", title="Amyloid Progression",
-#               yticks=0:0.2:1.0, xticks=0:20:150, yticksize=10)
-#     CairoMakie.xlims!(ax, 0.0, 80)
-#     CairoMakie.ylims!(ax, 0.0, 1.1)
-#     hlines!(ax, 0.9, color=:black, linestyle=:dash)
-#     for i in 1:36
-#         lines!(sol.t, Array(sol)[i, :], color=(:grey, 0.5), linewidth=2)
-#     end
-#     lines!(sol.t, Array(sol)[29, :], color=(:red, 0.75), linewidth=3)
-#     lines!(sol.t, Array(sol)[27, :], color=(:blue, 0.75), linewidth=3)
-#     f
-# end
-# save(projectdir("output/plots/colocalisation/ab_progression.pdf"), f)
+d1 = reduce(hcat, [sol(t, Val{1}) for t in 0:0.1:80])
+d2 = reduce(hcat, [sol(t, Val{2}) for t in 0:0.1:80])
+d3 = reduce(hcat, [sol(t, Val{3}) for t in 0:0.1:80])
+ts = 0:0.1:80
 
-# begin
-#     CairoMakie.activate!()
-#     f = Figure(size = (1200, 350), fontsize=20)
-#     ax = Axis(f[1,1], xlabel="t / years", ylabel="Concentration", title="Amyloid Progression",
-#     yticks=0:0.2:1.0, xticks=0:20:150, yticksize=5, ylabelsize=25, xlabelsize=25)
-#     CairoMakie.xlims!(ax, 0.0, 80)
-#     CairoMakie.ylims!(ax, 0.0, 1.05)
-#     hlines!(ax, 0.9, color=:grey, linestyle=:dash, linewidth=3)
-#     for i in 1:36
-#         lines!(sol.t, Array(sol)[i, :], color=(:grey, 0.5), linewidth=2)
-#     end
-#     lines!(sol.t, Array(sol)[29, :], color=(:red, 0.75), linewidth=3)
-#     lines!(sol.t, Array(sol)[27, :], color=(:blue, 0.75), linewidth=3)
+begin
+    f = Figure()
+    ax = Axis(f[1,1])
+    plot!(sol, idxs=29)
+    vlines!(ts[argmin(d2[29,:])])
 
-#     ax = Axis(f[1,2], xlabel="t / years", ylabel="Concentration", title="Tau Progression",
-#               yticks=0:0.2:1.0, xticks=0:20:100, yticksize=5, ylabelsize=25, xlabelsize=25)
-#     hideydecorations!(ax, grid=false, ticks=false)
-#     CairoMakie.xlims!(ax, 0.0, 80)
-#     CairoMakie.ylims!(ax, 0.0, 1.05)
-#     hlines!(ax, 0.1, color=:grey, linestyle=:dash, linewidth=3)
-#     for i in 1:36
-#         lines!(sol.t, Array(sol)[36 + i, :], color=(:grey, 0.5), linewidth=2)
-#     end
-#     lines!(sol.t, Array(sol)[36 + 29, :], color=(:red, 0.75), linewidth=3)
-#     lines!(sol.t, Array(sol)[36 + 27, :], color=(:blue, 0.75), linewidth=3)
-#     f
-# end
-# save(projectdir("output/plots/colocalisation/ab_tau_progression.pdf"), f)
-# --------------------------------------------------------------------------------
-# Colocalisation
-# --------------------------------------------------------------------------------
-# right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-right.csv"), DataFrame)
-# left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-order-left.csv"), DataFrame)
-
-# begin
-#     GLMakie.activate!()
-#     cmap = reverse(ColorSchemes.RdYlBu)
-#     f = Figure(size = (600, 500))
-#     ax = Axis3(f[1,1:5], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(left_df.DKTID, 
-#              reverse(collect(range(0, 1, 36))), cmap)
-
-#     ax = Axis3(f[2,1:5], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,   protrusions=(0.0,0.0,0.0,0.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(left_df.DKTID, 
-#               reverse(collect(range(0, 1, 36))), cmap)
-#     plot_roi!(get_node_id.(left_subcortex), ones(5) .* 0.75, ColorSchemes.Greys)
-
-#     ax = Axis3(f[1,6:10], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,   protrusions=(0.0,0.0,0.0,0.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(right_df.DKTID, 
-#             reverse(collect(range(0, 1, 36))), cmap)
-
-#     ax = Axis3(f[2,6:10], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,   protrusions=(0.0,0.0,0.0,0.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(right_df.DKTID, 
-#             reverse(collect(range(0, 1, 36))), cmap)
-#     plot_roi!(get_node_id.(right_subcortex), ones(5) .* 0.75, ColorSchemes.Greys)
-#     Colorbar(f[3, 2:9], colormap=reverse(cmap), limits=(1,36), 
-#              ticks=([1, 36], ["First", "Last"]), ticklabelsize=20, ticksize=10, labelpadding=-20,
-#              label="Order of colocalisation", vertical = false, flipaxis = false, labelsize=25)
-#     f
-# end
-# save(projectdir("output/plots/colocalisation/colocalisation-order-0109.jpeg"), f)
-
-# right_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-right.csv"), DataFrame)
-# left_df = CSV.read(projectdir("output/analysis-derivatives/colocalisation/0109/colocalisation-inits-prob-left.csv"), DataFrame)
-# begin
-#     GLMakie.activate!()
-#     cmap = ColorSchemes.viridis
-#     f = Figure(size = (600, 500))
-#     ax = Axis3(f[1,1:5], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(left_df.DKTID, max_norm(left_df.Seed_prob), cmap)
-    
-#     ax = Axis3(f[2,1:5], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(left_df.DKTID, max_norm(left_df.Seed_prob), cmap)
-#     plot_roi!(get_node_id.(left_subcortex), ones(5) .* 0.75, ColorSchemes.Greys)
-
-#     ax = Axis3(f[1,6:10], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(right_df.DKTID, max_norm(right_df.Seed_prob), cmap)
-    
-#     ax = Axis3(f[2,6:10], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(0.0,0.0,0.0,0.0))
-#     hidedecorations!(ax); hidespines!(ax)
-#     plot_roi!(right_df.DKTID, max_norm(right_df.Seed_prob), cmap)
-#     plot_roi!(get_node_id.(right_subcortex), ones(5) .* 0.75, ColorSchemes.Greys)
-
-#     Colorbar(f[3, 2:9], colormap=cmap, limits=(0, 0.4), ticks=[0,0.4],
-#               ticklabelsize=20, ticksize=10, vertical = false, flipaxis = false, tellwidth=false,
-#               label="Probability of colocalisation", labelsize=25, labelpadding=-20)
-#     f
-# end
-# save(projectdir("output/plots/colocalisation/colocalisation-prob-0109.jpeg"), f)
+    ax = Axis(f[2, 1])
+    scatter!(ts, d1[29,:])
+    scatter!(ts, d2[29,:])
+    scatter!(ts, d3[29,:])
+    vlines!(ts[argmin(d2[29,:])])
+    f
+end
 
 begin
     GLMakie.activate!()

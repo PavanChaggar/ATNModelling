@@ -63,7 +63,7 @@ function dose(c, t, t0)
     if t < t0   
         return 0 
     else
-        return c * exp(-mod(t, 3))
+        return c * exp(-mod(t, 1))
     end
 end
 
@@ -441,6 +441,25 @@ function success_condition(retcodes)
 end
 
 """
+    get_sub_params(pst::Chains, n::UnitRange, k::Int)
+
+Return average parameter for length(n) subjects from from the kth sample of the posterior chain, pst.
+"""
+function get_sub_params(pst, n, k)
+    _p = [mean([pst["α_a[$i]"][k] for i in n]),
+            mean([pst["ρ_t[$i]"][k] for i in n]),
+            mean([pst["α_t[$i]"][k] for i in n]),
+            pst["β_fbb"][k],
+            mean([pst["η[$i]"][k] for i in n])]
+end
+function get_sub_params_fixed_beta(pst, n, k, beta)
+    _p = [mean([pst["α_a[$i]"][k] for i in n]),
+            mean([pst["ρ_t[$i]"][k] for i in n]),
+            mean([pst["α_t[$i]"][k] for i in n]),
+            mean([pst["η[$i]"][k] for i in n])]
+    return [_p[1], _p[2], _p[3], beta, _p[4]]
+end
+"""
     calculate_colocalisation_order(parc::Parcellation, pst, model, inits, tau_threshold, ab_threshold)
 
 Returns a `DataFrame` containing the ordered list of regions in `parc` according to their colocalisation order. 
@@ -449,16 +468,17 @@ The colocalisation order is determined by simulating a solution to `model` using
 with a given `tau_threshold` and `ab_threshold`.
 """
 
-function calculate_colocalisation_order(parc::Parcellation, pst::Chains, model, inits, tau_threshold, ab_threshold)
+function calculate_colocalisation_order(parc::Parcellation, pst::Chains, model, inits, tau_threshold, ab_threshold; tracer)
     meanpst = mean(pst)
-    params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], meanpst[:β, :mean], meanpst[:Em, :mean]
-
+    params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], meanpst[tracer, :mean], meanpst[:Em, :mean]
+    # params = mean([get_sub_params(pst, 1:18, i) for i in 1:n_samples])
     _calculate_colocalisation_order(parc::Parcellation, params, model, inits, tau_threshold, ab_threshold)
 end
 
 function calculate_colocalisation_order(parc::Parcellation, pst::Chains, beta::Float64, model, inits, tau_threshold, ab_threshold)
     meanpst = mean(pst)
     params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], beta, meanpst[:Em, :mean]
+    # params = mean([get_sub_params_fixed_beta(pst, 1:18, i, beta) for i in 1:n_samples])
 
     _calculate_colocalisation_order(parc::Parcellation, params, model, inits, tau_threshold, ab_threshold)
 end
@@ -516,11 +536,18 @@ function _calculate_colocalisation_order(parc::Parcellation, params, model, init
         push!(ab_tau_coloc_time, sol.t[findfirst(x -> x == 1, i)])
     end
 
+    tau_time = Vector{Float64}()
+    for i in eachrow(tau_seed_idx)
+        push!(tau_time, sol.t[findfirst(x -> x == 1, i)])
+    end
+    
+
     df = DataFrame(RegionID = collect(1:nodes), 
                    DKTID = get_node_id.(parc), 
                    Region = get_label.(parc), 
                    Hemisphere = get_hemisphere.(parc),
-                   Coloc_time = ab_tau_coloc_time)
+                   Coloc_time = ab_tau_coloc_time,
+                   tau_time = tau_time)
     sorted_df = sort(df, :Coloc_time)
     sorted_df.Order = 1:nodes
     return sorted_df
@@ -587,10 +614,11 @@ end
 For a given model and parcellation, find the initial colocalisation probability given a 
 posteriod distribution `pst`, initial conditions `inits`, tau threshold `tau_threshold` and ab threshold `ab_threshold`, 
 """
-function calculate_colocalisation_prob(parc, pst, model, inits, tau_threshold, ab_threshold)
-    sols = [simulate(model, inits, (0, 200), params, saveat=0.1) 
-                    for params in zip( vec(pst[:Am_a]), vec(pst[:Pm_t]), vec(pst[:Am_t]), vec(pst[:β]), vec(pst[:Em]))];
-
+function calculate_colocalisation_prob(parc, pst, model, inits, tau_threshold, ab_threshold; tracer=:β_fbb)
+    sols = [simulate(model, inits, (0, 50), params, saveat=0.05) 
+    for params in zip( vec(pst[:Am_a]), vec(pst[:Pm_t]), vec(pst[:Am_t]), vec(pst[tracer]), vec(pst[:Em]))];
+    # for params in [get_sub_params(pst, 1:18, i) for i in 1:1000]]
+                        
     seed_idx = reduce(vcat, find_seed(parc, sols, tau_threshold, ab_threshold))
 
     nodes = length(parc)
@@ -611,9 +639,9 @@ function calculate_colocalisation_prob(parc, pst, model, inits, tau_threshold, a
 end
 
 function calculate_colocalisation_prob(parc, pst, beta, model, inits, tau_threshold, ab_threshold)
-    sols = [simulate(model, inits, (0, 200), params, saveat=0.1) 
-                    for params in zip( vec(pst[:Am_a]), vec(pst[:Pm_t]), vec(pst[:Am_t]), fill(beta, size(pst,1)), vec(pst[:Em]))];
-
+sols = [simulate(model, inits, (0, 200), params, saveat=0.1) 
+    for params in zip( vec(pst[:Am_a]), vec(pst[:Pm_t]), vec(pst[:Am_t]), beta, vec(pst[:Em]))];
+# for params in [get_sub_params_fixed_beta(pst, 1:18, i, beta) for i in 1:1000]]
     seed_idx = reduce(vcat, find_seed(parc, sols, tau_threshold, ab_threshold))
 
     nodes = length(parc)
