@@ -19,7 +19,7 @@ using CairoMakie; CairoMakie.activate!()
 # --------------------------------------------------------------------------------
 # Connectome and Data
 # --------------------------------------------------------------------------------
-v0, vi, part = load_tau_params()
+v0, vi, part = load_tau_params(tracer="RO")
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
 L = laplacian_matrix(c) 
 cortex = get_parcellation() |> get_cortex 
@@ -31,35 +31,33 @@ dktnames = get_dkt_names(cortex)
 right_cortex = filter(x -> get_hemisphere(x) == "right", cortex)
 left_cortex = filter(x -> get_hemisphere(x) == "left", cortex)
 # Amyloid data 
-_ab_data_df =  CSV.read(datadir("ADNI/2025/UCBERKELEY_AMY_6MM_28Jul2025.csv"), DataFrame)
-_tau_data_df = CSV.read(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025-Ab-tau-Status.csv"), DataFrame) 
+include(projectdir("bf-data.jl"))
 
-tau_data_df = filter(x -> x.qc_flag==2 && x.AB_Status == 1, _tau_data_df);
-tau_pos_df = filter(x ->  x.MTL_Status == 1 && x.NEO_Status == 0, tau_data_df);
-_tau_data = ADNIDataset(tau_pos_df, dktnames; min_scans=1)
-tau_subs = get_id.(_tau_data)
-tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-1std.csv")) |> vec
+data_path = datadir("bf-data/bf-data-ab-tau-summary.csv");
+data_df = CSV.read(data_path, DataFrame)
 
-tracer="FBB"
-fbb_u0, fbb_ui = load_ab_params(tracer=tracer)
-fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer && x.AMYLOID_STATUS_COMPOSITE_REF == 1 && x.RID ∈ tau_subs && x.CENTILOIDS < 67, _ab_data_df);
-fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COMPOSITE_REF")
+ab_data_df = filter(x -> x.ab_status == 1, data_df)
+ab_data = BFDataset(ab_data_df, dktnames; min_scans=1, tracer=:ab)
 
-tau_data = filter(x -> get_id(x) ∈ get_id.(fbb_data), _tau_data)
+ab_tau_pos_df = filter(x ->  x.ab_status == 1 && x.MTL_Status == 1 && x.NEO_Status == 0, data_df);
+tau_data = BFDataset(ab_tau_pos_df, dktnames; min_scans=3, tracer=:tau)
+ab_data = BFDataset(ab_tau_pos_df, dktnames; min_scans=3, tracer=:ab)
+fmm_u0, fmm_ui = load_ab_params(tracer="FMM")
+tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/bf/tau-derivatives/tau-cutoffs-1std-bf.csv")) |> vec
 
-pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-1x1000.jls"));
+pst = deserialize(projectdir("output/chains/population-atn/pst-samples-bf-random-lognormal-dense-1x1000.jls"));
 meanpst = mean(pst)
-mean([meanpst["α_a[$i]", :mean] for i in 1:18])
-mean([meanpst["ρ_t[$i]", :mean] for i in 1:18])
-mean([meanpst["α_t[$i]", :mean] for i in 1:18])
-mean([meanpst["η[$i]", :mean] for i in 1:18])
-meanpst["β_fbb", :mean]
+mean([meanpst["α_a[$i]", :mean] for i in 1:48])
+mean([meanpst["ρ_t[$i]", :mean] for i in 1:48])
+mean([meanpst["α_t[$i]", :mean] for i in 1:48])
+mean([meanpst["η[$i]", :mean] for i in 1:48])
+meanpst["β", :mean]
 # --------------------------------------------------------------------------------
 # Amyloid data
 # --------------------------------------------------------------------------------
-ab_suvr = calc_suvr.(fbb_data)
-normalise!(ab_suvr, fbb_u0, fbb_ui)
-ab_conc = map(x -> conc.(x, fbb_u0, fbb_ui), ab_suvr)
+ab_suvr = calc_suvr.(ab_data)
+normalise!(ab_suvr, fmm_u0, fmm_ui)
+ab_conc = map(x -> conc.(x, fmm_u0, fmm_ui), ab_suvr)
 ab_inits = [d[:,1] for d in ab_conc]
 
 _mean_ab_init = mean(ab_inits)
@@ -70,7 +68,7 @@ scatter(mean_ab_init)
 max_norm(c) =  c ./ maximum(c);
 
 tau_suvr = calc_suvr.(tau_data)
-vi = part .+ (4.836840700255846.* (fbb_ui .- fbb_u0))
+vi = part .+ (4.844 .* (fmm_ui .- fmm_u0))
 normalise!(tau_suvr, v0, vi)
 tau_conc = map(x -> conc.(x, v0, vi), tau_suvr)
 tau_inits = [d[:,1] for d in tau_conc]
@@ -84,23 +82,24 @@ _mean_tau_init_sym = maximum.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
 mean_tau_init = [_mean_tau_init_sym; _mean_tau_init_sym]
 scatter(mean_tau_init)
 
-amyloid_production = 0.37
+argmax(mean_tau_init)
+amyloid_production = 0.18
 tau_transport = 0.07
-tau_production = 0.13
-coupling = 4.836840700255846
-atrophy = 0.15
+tau_production = 0.07
+coupling = 4.844
+atrophy = 0.12
 
 p = [amyloid_production, tau_transport, tau_production, coupling, atrophy]
 
-vi = part .+ (coupling .* (fbb_ui .- fbb_u0))
-atn_model = make_scaled_atn_model((fbb_ui .- fbb_u0), (part .- v0), L)
+vi = part .+ (coupling .* (fmm_ui .- fmm_u0))
+atn_model = make_scaled_atn_model((fmm_ui .- fmm_u0), (part .- v0), L)
 
-prob = ODEProblem(atn_model, [mean_ab_init; mean_tau_init; zeros(72)], (0, 80), p)
+prob = ODEProblem(atn_model, [mean_ab_init; mean_tau_init; zeros(72)], (0, 200), p)
 sol = solve(prob, Tsit5(), reltol=1e-12, abstol=1e-12)
-d1 = reduce(hcat, [sol(t, Val{1}) for t in 0:0.1:80])
-d2 = reduce(hcat, [sol(t, Val{2}) for t in 0:0.1:80])
-d3 = reduce(hcat, [sol(t, Val{3}) for t in 0:0.1:80])
-d4 = reduce(hcat, [sol(t, Val{4}) for t in 0:0.1:80])
+d1 = reduce(hcat, [sol(t, Val{1}) for t in 0:0.1:200])
+d2 = reduce(hcat, [sol(t, Val{2}) for t in 0:0.1:200])
+d3 = reduce(hcat, [sol(t, Val{3}) for t in 0:0.1:200])
+d4 = reduce(hcat, [sol(t, Val{4}) for t in 0:0.1:200])
 
 function logistic_solution(t, a, x0)
     return (x0 * exp(a * t))/(1 + x0 * (-1 + exp(a *t)))
@@ -128,12 +127,12 @@ println(mean(ab_threshold))
 println(mean(tau_threshold))
 scatter(ab_threshold)
 scatter(tau_threshold)
-writedlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/ab-thresholds.csv"), ab_threshold)
-writedlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/tau-thresholds.csv"), tau_threshold)
+writedlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/ab-thresholds-bf.csv"), ab_threshold)
+writedlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/tau-thresholds-bf.csv"), tau_threshold)
 
 begin
     f = Figure(size=(1000, 600))
-    node = 36
+    node = 25
     ax = Axis(f[1,1])
     ylims!(ax, 0, 1)
     plot!(sol, idxs=72+node)
@@ -151,7 +150,7 @@ end
 
 begin
     f = Figure(size=(1000, 600))
-    node = 3
+    node = 29
     ax = Axis(f[1,1])
     ylims!(ax, 0, 1)
     plot!(sol, idxs=node)
@@ -160,8 +159,8 @@ begin
     # vlines!(ab_threshold_t[node])
     ax = Axis(f[2,1])
     # ylims!(ax, -0.015, 0.015)
-    lines!(0:0.1:80, d2[node, :])
-    lines!(0:0.1:80, d3[node, :])
+    lines!(0:0.1:200, d2[node, :])
+    lines!(0:0.1:200, d3[node, :])
     # lines!(0:0.1:80, d4[72+node, :])
     # vlines!(ab_threshold_t[node])
     f
