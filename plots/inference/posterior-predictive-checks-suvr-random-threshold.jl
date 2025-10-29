@@ -3,7 +3,8 @@ using ATNModelling.SimulationUtils: make_prob, make_atn_model,
                                     load_ab_params, load_tau_params, conc
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names,
                                     get_braak_regions
-using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise, make_ucsf_df,rename_ucsf_df, add_icv, make_ucsf_name, make_dkt_name
+using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise, make_ucsf_df,rename_ucsf_df, 
+                              add_icv, make_ucsf_name, make_dkt_name, normalise_and_threshold!
 using ATNModelling.InferenceModels: fit_model, ensemble_atn, serial_atn, fit_serial_catn
 
 using Connectomes: laplacian_matrix, get_label, get_node_id
@@ -19,6 +20,7 @@ using Serialization
 using LsqFit
 using CairoMakie; CairoMakie.activate!()
 using Colors, ColorSchemes
+using DelimitedFiles
 include(projectdir("bf-data.jl"))
 # --------------------------------------------------------------------------------
 # Tracer independent data
@@ -45,6 +47,8 @@ tau_atr_df = add_icv(tau_pos_df, atr_df; dt_threshold=180)
 tau_icv_df = filter(x -> x.Has_ICV, tau_atr_df)
 
 tau_data = ADNIDataset(tau_icv_df, dktnames; min_scans=3)
+
+tau_thresholds = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-1std.csv")) |> vec
 # --------------------------------------------------------------------------------
 # Load fbb data
 # --------------------------------------------------------------------------------
@@ -71,7 +75,7 @@ normalise!(fbb_suvr, fbb_u0, fbb_ui)
 fbb_inits = [d[:,1] for d in fbb_suvr]
 
 fbb_tau_suvr = calc_suvr.(fbb_tau)
-normalise!(fbb_tau_suvr, ftp_v0)
+normalise_and_threshold!(fbb_tau_suvr, ftp_v0, tau_thresholds)
 fbb_tau_inits = [d[:,1] for d in fbb_tau_suvr]
 
 fbb_tau_pos_vol = get_vol.(fbb_tau)
@@ -115,7 +119,7 @@ normalise!(fbp_suvr, fbp_u0, fbp_ui)
 fbp_inits = [d[:,1] for d in fbp_suvr]
 
 fbp_tau_suvr = calc_suvr.(fbp_tau)
-normalise!(fbp_tau_suvr, ftp_v0)
+normalise_and_threshold!(fbp_tau_suvr, ftp_v0, tau_thresholds)
 fbp_tau_inits = [d[:,1] for d in fbp_tau_suvr]
 
 fbp_tau_pos_vol = get_vol.(fbp_tau)
@@ -191,8 +195,8 @@ plot(sol, idxs=73:144)
 # pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-1x1000.jls"));
 # adni_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-fixed-beta-lognormal-1x1000.jls"));
 # bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-bf-fixed-beta-lognormal-1x1000.jls"));
-adni_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-1x1000.jls"));
-adni_pst = chainscat([deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-4x1000-$i.jls")) for i in 1:4]...)
+adni_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-threshold-1x1000-1.jls"));
+# adni_pst = chainscat([deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-4x1000-$i.jls")) for i in 1:4]...)
 bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-bf-random-lognormal-dense-1x1000.jls"));
 
 summarize(adni_pst)
