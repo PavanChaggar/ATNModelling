@@ -502,11 +502,17 @@ function _calculate_colocalisation_order(parc::Parcellation, params, model, init
         push!(ab_tau_coloc_time, sol.t[findfirst(x -> x == 1, i)])
     end
 
+    tau_time = Vector{Float64}()
+    for i in eachrow(tau_seed_idx)
+        push!(tau_time, sol.t[findfirst(x -> x == 1, i)])
+    end
+    
     df = DataFrame(RegionID = collect(1:nodes), 
                    DKTID = get_node_id.(parc), 
                    Region = get_label.(parc), 
                    Hemisphere = get_hemisphere.(parc),
-                   Coloc_time = ab_tau_coloc_time)
+                   Coloc_time = ab_tau_coloc_time,
+                   tau_time = tau_time)
     sorted_df = sort(df, :Coloc_time)
     sorted_df.Order = 1:nodes
     return sorted_df

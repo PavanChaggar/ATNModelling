@@ -270,6 +270,22 @@ function normalise!(data::Vector{Matrix{Float64}}, lower::Vector{Float64})
     @assert allequal([allequal(d .>= lower) for d in data])
 end
 
+function normalise_and_threshold!(data::Vector{Matrix{Float64}}, lower::Vector{Float64}, threshold::Vector{Float64})
+    @assert allequal(size.(data, 1) .== length(lower))
+    for d in data
+        for i in axes(d, 1)
+            lower_mask = d[i,:] .< lower[i]
+            d[i, lower_mask] .= lower[i]
+
+            threshold_mask = d[i,:] .< threshold[i]
+            d[i, threshold_mask] .= lower[i]
+        end
+    end
+    @assert allequal([allequal(d .>= lower) for d in data])
+end
+
+
+
 """
     calc_times(ab::ADNISubject, tau::ADNISubject)
     calc_times(ab::ADNIDataset, tau::ADNIDataset)
