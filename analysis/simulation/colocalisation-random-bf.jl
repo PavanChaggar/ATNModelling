@@ -35,12 +35,14 @@ include(projectdir("bf-data.jl"))
 data_path = datadir("bf-data/bf-data-ab-tau-summary.csv");
 data_df = CSV.read(data_path, DataFrame)
 
-ab_data_df = filter(x -> x.ab_status == 1, data_df)
+ab_data_df = filter(x -> x.ab_status == 1 
+                && x.CL_fnc_ber_com_composite <70, data_df)
 ab_data = BFDataset(ab_data_df, dktnames; min_scans=1, tracer=:ab)
+mean(ab_data_df.CL_fnc_ber_com_composite)
 
 ab_tau_pos_df = filter(x ->  x.ab_status == 1 && x.MTL_Status == 1 && x.NEO_Status == 0, data_df);
-tau_data = BFDataset(ab_tau_pos_df, dktnames; min_scans=3, tracer=:tau)
-ab_data = BFDataset(ab_tau_pos_df, dktnames; min_scans=3, tracer=:ab)
+tau_data = BFDataset(ab_data_df, dktnames; min_scans=1, tracer=:tau)
+ab_data = BFDataset(ab_data_df, dktnames; min_scans=1, tracer=:ab)
 fmm_u0, fmm_ui = load_ab_params(tracer="FMM")
 
 tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/bf/tau-derivatives/tau-cutoffs-1std-bf.csv")) |> vec
@@ -77,7 +79,7 @@ _mean_tau_init = mean(tau_inits)
 idx = _mean_tau_init .< conc.(tau_cutoffs, v0, vi)
 # idx = _mean_tau_init .< tau_cutoffs
 _mean_tau_init[idx] .= 0
-_mean_tau_init_sym = maximum.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
+_mean_tau_init_sym = mean.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
 mean_tau_init = [_mean_tau_init_sym; _mean_tau_init_sym]
 
 using CairoMakie; CairoMakie.activate!()
@@ -86,6 +88,10 @@ scatter(mean_tau_init)
 ab_threshold = readdlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/ab-thresholds-bf.csv")) |> vec
 tau_threshold = readdlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/tau-thresholds-bf.csv")) |> vec
 # ab_threshold = fill(0.5,72)
+# ab_threshold[[35,71]] .= 0.9
+# scatter(tau_threshold)
+# ab_threshold = fill(mean(ab_threshold), 72)
+# tau_threshold = fill(mean(tau_threshold[non_seed_idx]), 72)
 # --------------------------------------------------------------------------------
 # Modelling!
 # --------------------------------------------------------------------------------
@@ -112,7 +118,7 @@ for (hem_idx, hem) in zip([1:36, 37:72, 1:72], ["right", "left", "all"])
     # ab_tau_coloc_time = calculate_colocalisation_order(_cortex, pst, atn_model, inits, 0.09, 0.79)
     ab_tau_coloc_time = calculate_colocalisation_order(_cortex, pst, atn_model, inits, _tau_threshold, _ab_threshold; tracer=:β)
     display(ab_tau_coloc_time)
-    # CSV.write(projectdir("output/analysis-derivatives/colocalisation/ab-tau-thresholds-random/colocalisation-inits-order-" * hem * ".csv"), ab_tau_coloc_time)
+    CSV.write(projectdir("output/analysis-derivatives/colocalisation-bf/ab-tau-thresholds-random/colocalisation-inits-order-" * hem * ".csv"), ab_tau_coloc_time)
 
     # ab_tau_coloc_order = calculate_colocalisation_prob(_cortex, pst, 3.2258211441306877, atn_model, inits, _tau_threshold, _ab_threshold)
     # display(ab_tau_coloc_order)
@@ -120,5 +126,49 @@ for (hem_idx, hem) in zip([1:36, 37:72, 1:72], ["right", "left", "all"])
     # ab_tau_coloc_order = calculate_colocalisation_prob(_cortex, pst, atn_model, inits, 0.09, 0.79)
     ab_tau_coloc_order = calculate_colocalisation_prob(_cortex, pst, atn_model, inits, _tau_threshold, _ab_threshold; tracer=:β)
     display(ab_tau_coloc_order)
-    # CSV.write(projectdir("output/analysis-derivatives/colocalisation/ab-tau-thresholds-random/colocalisation-inits-prob-" * hem * ".csv"), ab_tau_coloc_order)
+    CSV.write(projectdir("output/analysis-derivatives/colocalisation-bf/ab-tau-thresholds-random/colocalisation-inits-prob-" * hem * ".csv"), ab_tau_coloc_order)
+end
+
+# ab_threshold = readdlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/ab-thresholds-bf.csv")) |> vec
+tau_threshold = readdlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/tau-thresholds-bf.csv")) |> vec
+ab_threshold = fill(0.5,72)
+# ab_threshold[[35,71]] .= 0.9
+# scatter(tau_threshold)
+# ab_threshold = fill(mean(ab_threshold), 72)
+# tau_threshold = fill(mean(tau_threshold[non_seed_idx]), 72)
+# --------------------------------------------------------------------------------
+# Modelling!
+# --------------------------------------------------------------------------------
+for (hem_idx, hem) in zip([1:36, 37:72, 1:72], ["right", "left", "all"])
+# for (hem_idx, hem) in zip([1:72], ["all"])
+    
+    if hem == "right" || hem == "left"
+        _cortex = filter(x -> get_hemisphere(x) == hem, cortex)
+        _ab_threshold = ab_threshold[hem_idx]
+        _tau_threshold = tau_threshold[hem_idx]
+        atn_model = make_scaled_atn_model((fmm_ui .- fmm_u0)[hem_idx], (part .- v0)[hem_idx], L[hem_idx,hem_idx])
+    elseif hem == "all"
+        _cortex = deepcopy(cortex)
+        _ab_threshold = ab_threshold[hem_idx]
+        _tau_threshold = tau_threshold[hem_idx]
+        atn_model = make_scaled_atn_model((fmm_ui .- fmm_u0)[hem_idx], (part .- v0)[hem_idx], L[hem_idx,hem_idx])
+    end
+
+    inits = [mean_ab_init[hem_idx]; mean_tau_init[hem_idx]; zeros(length(hem_idx))]
+    
+    # ab_tau_coloc_time = calculate_colocalisation_order(_cortex, pst, 3.2258211441306877, atn_model, inits, _tau_threshold, _ab_threshold)
+    # display(ab_tau_coloc_time)
+    # CSV.write(projectdir("output/analysis-derivatives/colocalisation/0175/colocalisation-inits-order-threshold" * hem * ".csv"), ab_tau_coloc_time)
+    # ab_tau_coloc_time = calculate_colocalisation_order(_cortex, pst, atn_model, inits, 0.09, 0.79)
+    ab_tau_coloc_time = calculate_colocalisation_order(_cortex, pst, atn_model, inits, _tau_threshold, _ab_threshold; tracer=:β)
+    display(ab_tau_coloc_time)
+    CSV.write(projectdir("output/analysis-derivatives/colocalisation-bf/05-tau-thresholds-random/colocalisation-inits-order-" * hem * ".csv"), ab_tau_coloc_time)
+
+    # ab_tau_coloc_order = calculate_colocalisation_prob(_cortex, pst, 3.2258211441306877, atn_model, inits, _tau_threshold, _ab_threshold)
+    # display(ab_tau_coloc_order)
+    # CSV.write(projectdir("output/analysis-derivatives/colocalisation/0175/colocalisation-inits-prob-threshold" * hem * ".csv"), ab_tau_coloc_order)
+    # ab_tau_coloc_order = calculate_colocalisation_prob(_cortex, pst, atn_model, inits, 0.09, 0.79)
+    ab_tau_coloc_order = calculate_colocalisation_prob(_cortex, pst, atn_model, inits, _tau_threshold, _ab_threshold; tracer=:β)
+    display(ab_tau_coloc_order)
+    CSV.write(projectdir("output/analysis-derivatives/colocalisation-bf/05-tau-thresholds-random/colocalisation-inits-prob-" * hem * ".csv"), ab_tau_coloc_order)
 end

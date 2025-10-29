@@ -10,7 +10,6 @@ using Connectomes: get_hemisphere, plot_roi!, get_node_id, get_lobe, laplacian_m
 using Colors, ColorSchemes, GLMakie
 using DifferentialEquations
 using CSV, DataFrames, DrWatson
-using ADNIDatasets
 using Statistics
 using Serialization
 using LinearAlgebra
@@ -36,12 +35,14 @@ include(projectdir("bf-data.jl"))
 data_path = datadir("bf-data/bf-data-ab-tau-summary.csv");
 data_df = CSV.read(data_path, DataFrame)
 
-ab_data_df = filter(x -> x.ab_status == 1, data_df)
+ab_data_df = filter(x -> x.ab_status == 1 
+                    && x.CL_fnc_ber_com_composite < 70, data_df)
 ab_data = BFDataset(ab_data_df, dktnames; min_scans=1, tracer=:ab)
+mean(ab_data_df.CL_fnc_ber_com_composite)
 
 ab_tau_pos_df = filter(x ->  x.ab_status == 1 && x.MTL_Status == 1 && x.NEO_Status == 0, data_df);
-tau_data = BFDataset(ab_tau_pos_df, dktnames; min_scans=3, tracer=:tau)
-ab_data = BFDataset(ab_tau_pos_df, dktnames; min_scans=3, tracer=:ab)
+tau_data = BFDataset(ab_data_df, dktnames; min_scans=1, tracer=:tau)
+ab_data = BFDataset(ab_data_df, dktnames; min_scans=1, tracer=:ab)
 fmm_u0, fmm_ui = load_ab_params(tracer="FMM")
 tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/bf/tau-derivatives/tau-cutoffs-1std-bf.csv")) |> vec
 
@@ -78,7 +79,7 @@ _mean_tau_init = mean(tau_inits)
 idx = _mean_tau_init .< conc.(tau_cutoffs, v0, vi)
 # idx = _mean_tau_init .< tau_cutoffs
 _mean_tau_init[idx] .= 0
-_mean_tau_init_sym = maximum.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
+_mean_tau_init_sym = mean.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
 mean_tau_init = [_mean_tau_init_sym; _mean_tau_init_sym]
 scatter(mean_tau_init)
 
@@ -141,8 +142,8 @@ begin
     vlines!(tau_threshold_t[node])
     ax = Axis(f[2,1])
     # ylims!(ax, -0.015, 0.015)
-    lines!(0:0.1:80, d2[72+node, :])
-    lines!(0:0.1:80, d3[72+node, :])
+    lines!(0:0.1:200, d2[72+node, :])
+    lines!(0:0.1:200, d3[72+node, :])
     # lines!(0:0.1:80, d4[72+node, :])
     vlines!(tau_threshold_t[node])
     f
