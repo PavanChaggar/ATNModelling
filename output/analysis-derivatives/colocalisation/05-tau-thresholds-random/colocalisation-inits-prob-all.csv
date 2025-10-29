@@ -57,6 +57,7 @@ DKTID,Seed,Hemisphere,Seed_prob,lobe
 63,pericalcarine,left,0.0,occiptal
 64,lateraloccipital,left,0.0,occiptal
 65,lingual,left,0.0,occiptal
+66,fusiform,left,0.0,temporal
 69,temporalpole,left,0.0,temporal
 71,middletemporal,left,0.0,temporal
 72,bankssts,left,0.0,temporal
@@ -65,9 +66,8 @@ DKTID,Seed,Hemisphere,Seed_prob,lobe
 75,insula,left,0.0,cingulate
 81,Left-Hippocampus,left,0.0,temporal
 82,Left-Amygdala,left,0.0,temporal
-60,inferiorparietal,left,0.007088474665266474,parietal
-20,precuneus,right,0.030716723549488054,parietal
-66,fusiform,left,0.04935678655815175,temporal
-68,entorhinal,left,0.1709110002625361,temporal
-70,inferiortemporal,left,0.3470727224993437,temporal
-67,parahippocampal,left,0.394854292465214,temporal
+60,inferiorparietal,left,0.0002613012803762738,parietal
+20,precuneus,right,0.0013065064018813691,parietal
+70,inferiortemporal,left,0.1256859158609877,temporal
+67,parahippocampal,left,0.2788084661614842,temporal
+68,entorhinal,left,0.5939378102952705,temporal
