@@ -28,6 +28,15 @@ function get_cortex(parc::Parcellation)
 end
 
 """
+   get_subcortex(parc::Parcellation)
+
+Filter the `parc` for only subcortical regions.
+"""
+function get_subcortex(parc::Parcellation)
+    filter(x -> get_lobe(x) == "subcortex", parc)
+end
+
+"""
    get_dkt_names(parc::Parcellation)
 
 Generate regional names according to FreeSurfer output

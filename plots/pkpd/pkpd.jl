@@ -1,7 +1,8 @@
 using ATNModelling.SimulationUtils: make_prob, make_scaled_atn_model, make_scaled_atn_pkpd_model_tau,
                                     simulate, resimulate, simulate_amyloid,
                                     load_ab_params, load_tau_params, conc, make_scaled_atn_pkpd_model
-using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names, get_distance_laplacian, get_braak_regions
+using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names, get_distance_laplacian, get_braak_regions,
+                                    get_subcortex
 using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise
 
 using Connectomes: laplacian_matrix, get_label, get_hemisphere, get_node_id, plot_roi!
@@ -19,7 +20,9 @@ using Serialization
 # --------------------------------------------------------------------------------
 v0, vi, part = load_tau_params()
 parc = get_parcellation() |> get_cortex
+subcortical_parc = get_parcellation(;) |> get_subcortex
 cortex = filter(x -> get_hemisphere(x) == "right", parc)
+subcortex = filter(x -> get_hemisphere(x) == "right", subcortical_parc)
 
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2);
 Ld = get_distance_laplacian()
@@ -82,7 +85,7 @@ mean_tau_init = mean.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
 
 vol_init = zeros(36)
 tmax = 360
-ts = range(0, tmax, tmax * 2)
+ts = range(0, tmax, tmax * 10)
 
 amyloid_production = mean([meanpst["α_a[$i]", :mean] for i in 1:18]) / 12
 tau_transport = mean([meanpst["ρ_t[$i]", :mean] for i in 1:18]) / 12
@@ -182,7 +185,7 @@ for (i, t) in enumerate(int_ts)
                                             coupling, atrophy, 
                                             drug_transport, drug_effect, 
                                             drug_concentration, drug_clearance]; 
-                                            saveat=ts, tol=1e-6)
+                                            saveat=ts, tol=1e-12)
     push!(sols, _sol)
     push!(absols, Array(_sol[1:36,:]))
     push!(tausols, Array(_sol[37:72,:]))
@@ -196,11 +199,12 @@ end
 # --------------------------------------------------------------------------------
 begin
     GLMakie.activate!()
-    f = Figure(size=(1200, 1200), figure_padding=(20,20,20,20))
+    f = Figure(size=(1400, 1400), figure_padding=(20,20,20,20))
     nodes = get_node_id.(cortex)
+    subcortical_nodes = get_node_id.(subcortex)
     lcmap = Makie.wong_colors()
     cmap = ColorSchemes.viridis
-
+    scmap = ColorSchemes.Greys
     gg = f[1, 1:2] = GridLayout(alignmode = Mixed(
         left = Makie.Protrusion(0),
         right = Makie.Protrusion(0),
@@ -208,32 +212,67 @@ begin
         top = Makie.Protrusion(10)))
     g1 = gg[1, 1]  = GridLayout()
     
-    ax1 = Axis(g1[1,1:2], ylabel="Drug μg / ml ", ytickformat="{:.1f}",
+    ax1 = Axis(g1[1,1], ylabel="Drug μg / ml ", ytickformat="{:.1f}",
                           xticks=(0:60:360, string.(collect(0:5:30))), yticks=0:200:400,
                           xlabel="Time / Years", yticklabelsize=20,
     xticklabelsize=20, ylabelpadding=10, xlabelsize=20, ylabelsize=20)
     xlims!(ax1, 0, 360)
     ylims!(ax1, 0, 550)
     plot!(sol, idxs=109:144)
-    g2 = gg[1,2] = GridLayout()
 
-    ax2 = Axis3(g2[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+    gtr = gg[1,2] = GridLayout()
+    ax2 = Axis3(gtr[1,1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax2)
     hidespines!(ax2)
-    plot_roi!(nodes, drugsol[:,end] ./ maximum(drugsol), cmap)
-    ax3 = Axis3(g2[1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+    plot_roi!(nodes, drugsols[1][:,end] ./ maximum(drugsols[1][:,end]), cmap)
+    plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
+    
+    ax3 = Axis3(gtr[1,2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
     hidedecorations!(ax3)
     hidespines!(ax3)
-    plot_roi!(nodes, drugsol[:,end] ./ maximum(drugsol), cmap)
-
-    cb = Colorbar(g2[2, 1:2], limits = (0, maximum(drugsol)), colormap = cmap, 
+    plot_roi!(nodes, drugsols[1][:,end] ./ maximum(drugsols[1][:,end]), cmap)
+    plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
+    
+    cb = Colorbar(gtr[2, 1:2], limits = (0, maximum(drugsols[1][:,end])), colormap = cmap, 
                  ticklabelsize=20, vertical=false, flipaxis=false, ticks=0:200:400, label="Drug μg / ml", labelsize=20)
     cb.alignmode = Mixed(left = 10, right = 10 , )
 
+    ax_init_1 = Axis3(gtr[1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax_init_1)
+    hidespines!(ax_init_1)
+    plot_roi!(nodes, absols[1][:,1] ./ 0.5, abcmap)
+    plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
+    ax_init_1 = Axis3(gtr[1,4], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax_init_1)
+    hidespines!(ax_init_1)
+    plot_roi!(nodes, absols[1][:,1] ./ 0.5, abcmap)
+    plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
 
+    cb = Colorbar(gtr[2, 3:4], limits = (0.0, 0.5), colormap = abcmap, label="Aβ conc.",ticklabelsize=20,
+                vertical = false, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1), tellheight=true)
+    # cb.alignmode = Mixed(right = 0)
+    cb.alignmode = Mixed(left = 10, right = 10 , )
+    
+    ax_init_2 = Axis3(gtr[1,5], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax_init_2)
+    hidespines!(ax_init_2)
+    plot_roi!(nodes, tausols[1][:,1] ./ 0.5, taucmap)
+    plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
+    ax_init_2 = Axis3(gtr[1,6], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+    hidedecorations!(ax_init_2)
+    hidespines!(ax_init_2)
+    plot_roi!(nodes, tausols[1][:,1] ./0.5, taucmap)
+    plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
+
+    cb = Colorbar(gtr[2, 5:6], limits = (0.0, 0.5), colormap = taucmap, label="Tau conc.",ticklabelsize=20,
+    vertical = false, labelsize=20, flipaxis=false, ticks=collect(0:0.5:1), tellheight=true)
+    # cb.alignmode = Mixed(right = 0)
+    cb.alignmode = Mixed(left = 10, right = 10 , )
+    colgap!(gtr, 2, 30)
     ## Solutions
-    g = [f[1 + i, 1:2] = GridLayout() for i in 1:3]
-
+    # g = [f[1 + i, 1:2] = GridLayout() for i in 1:3]
+    gm = f[2, 1:2] = GridLayout()
+    
     ab_col = get(abcmap, 0.75)
     tau_col = get(taucmap, 0.75)
     atr_col = get(atrcmap, 0.75)
@@ -249,15 +288,15 @@ begin
     for (i, (solt, sol, cmap, label)) in enumerate(zip([absolt, tausolt, atrsolt], 
                                                 [absol, tausol, atrsol], 
                                                 [abcmap, taucmap, atrcmap],
-                                                ["Aβ Conc.", "Tau Conc.", "Neurodegeneration"]))
+                                                ["Aβ Conc.", "Tau Conc.", "Neuro-\ndegeneration"]))
 
-        ax = GLMakie.Axis(g[i][1,1],
+        ax = GLMakie.Axis(gm[i,1],
                 xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.25), xgridwidth = 2,
                 xticklabelsize = 20, 
-                xticks=(0:60:360, string.(collect(0:5:30))), xticksize=10,
+                xticks=(0:60:360, string.(collect(0:5:30))), xticksize=5,
                 xlabel="Time / Years", xlabelsize = 20,
                 yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.25), ygridwidth = 2,
-                yticklabelsize = 20, yticksize=10,
+                yticklabelsize = 20, yticksize=5,
                 ylabel=label, ylabelsize = 20, yticks=collect(0:0.5:1)
         )
         if i < 3 
@@ -270,14 +309,16 @@ begin
             lines!(placebo_sol.t, sol[i, :], linewidth=2.0, color=alphacolor(get(cmap, 0.75), 0.5))
         end
 
-        ax = Axis3(g[i][1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+        ax = Axis3(gm[i,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, solt, cmap)
-        ax = Axis3(g[i][1,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+        plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
+        ax = Axis3(gm[i,3], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, solt, cmap)
+        plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
     
     end
 
@@ -291,13 +332,13 @@ begin
 
     for (i, (solt, sol, cmap)) in enumerate(zip([absolt, tausolt, atrsolt], [absol, tausol, atrsol], [abcmap, taucmap, atrcmap]))
 
-        ax = GLMakie.Axis(g[i][1,4],
+        ax = GLMakie.Axis(gm[i,4],
                 xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.25), xgridwidth = 2,
                 xticklabelsize = 20, 
-                xticks=(0:60:360, string.(collect(0:5:30))), xticksize=10,
+                xticks=(0:60:360, string.(collect(0:5:30))), xticksize=5,
                 xlabel="Time / Years", xlabelsize = 20,
                 yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.25), ygridwidth = 2,
-                yticklabelsize = 20, yticksize=10,
+                yticklabelsize = 20, yticksize=5,
                 ylabel="Conc.", ylabelsize = 20, yticks=collect(0:0.5:1)
         )
         if i < 3 
@@ -309,39 +350,44 @@ begin
         for j in 1:36
             lines!(placebo_sol.t, sol[j, :], linewidth=2.0, color=alphacolor(get(cmap, 0.75), 0.5))
         end
-        if i == 1 
-        ax_inset = Axis(g[i][1, 4],
-                        width=Relative(2/3),
-                        height=Relative(2/3),
-                        halign=0.75,
-                        valign=0.8, ygridcolor = (:grey, 0.25), xgridcolor = (:grey, 0.25),
-                        xgridwidth = 2,ygridwidth = 2,
-                        yticks=0:0.2:0.6, xticks=(0:10:40, string.(collect(0:1:4))))
-                        ylims!(ax_inset, 0., 0.6)
-                        xlims!(ax_inset, 0., 40)
-            for j in 1:36
-                lines!(placebo_sol.t, sol[j, :], linewidth=2.0, color=alphacolor(get(ColorSchemes.Greys, 0.5), 0.5))
-            end
-            for j in cingulate
-                lines!(placebo_sol.t, sol[j, :], linewidth=3.0, color=alphacolor(get(cmap, 0.75), 0.5))
-            end
-        end
-        ax = Axis3(g[i][1,5], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+        
+        ax = Axis3(gm[i,5], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, solt, cmap)
-        ax = Axis3(g[i][1,6], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
+    plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
+        ax = Axis3(gm[i,6], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(.0,.0,.0,.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, solt, cmap)
+    plot_roi!(subcortical_nodes, fill(0.5, 5), scmap)
 
-        Colorbar(g[i][1, 7], limits = (0.0, 1.0), colormap = cmap,
+        cb = Colorbar(gm[i, 7], limits = (0.0, 1.0), colormap = cmap,
         vertical = true, labelsize=20, flipaxis=true, ticks=collect(0:0.2:1),
         ticksize=10, ticklabelsize=20, labelpadding=10)
-    
+        cb.alignmode = Mixed(right=0,)
+
     end
+
+    ax_inset = Axis(gm[1, 4],
+                width=Relative(2/3),
+                height=Relative(2/3),
+                halign=0.75, tellheight=false, tellwidth=false,
+                valign=0.8, ygridcolor = (:grey, 0.25), xgridcolor = (:grey, 0.25),
+                xgridwidth = 2,ygridwidth = 2,
+                yticks=0:0.2:0.6, xticks=(0:10:40, string.(collect(0:1:4))))
+                ylims!(ax_inset, 0., 0.6)
+                xlims!(ax_inset, 0., 40)
+    for j in 1:36
+        lines!(placebo_sol.t, absol[j, :], linewidth=2.0, color=alphacolor(get(ColorSchemes.Greys, 0.5), 0.5))
+    end
+    for j in cingulate
+        lines!(placebo_sol.t, absol[j, :], linewidth=3.0, color=alphacolor(get(abcmap, 0.75), 0.5))
+    end
+    translate!.(ax_inset.blockscene, 0, 0, 100)
+        # ax.alignmode = Mixed(right=0, left=0)
     
-    g2 = f[5:7,1] = GridLayout()
+    g2 = f[3,1] = GridLayout()
     ax1 = Axis(g2[1,1], ylabel="Aβ Conc.", 
                 ytickformat="{:.1f}", ylabelsize=20, yticklabelsize=20, xticklabelsize=20,
                 xlabelsize=20, xticks=([0, 60, 120, 240, 360], ["0", "5", "10", "20", "30"]))
@@ -355,7 +401,7 @@ begin
     hidexdecorations!(ax2, grid=false, ticks=false)
     ylims!(ax2, 0.0, 1.05)
     xlims!(ax2, 0.0, tmax)
-    ax3 = Axis(g2[3,1], ylabel="Neurodegeneration", 
+    ax3 = Axis(g2[3,1], ylabel="Neuro-\ndegeneration", 
                 ytickformat="{:.1f}", xlabel="Time / Years", ylabelsize=20, yticklabelsize=20, xticklabelsize=20,
                 xlabelsize=20, xticks=([0, 60, 120, 240, 360], ["0", "5", "10", "20", "30"]))
     ylims!(ax3, 0.0, 1.05)
@@ -378,8 +424,8 @@ begin
     axislegend(ax1, unique=true, position=:lt,  orientation = :horizontal, framevisible=false, fontsize=5, nbanks=2, patchsize=(30,10), padding=(0,0,0,-5))
 
 
-    g3 = f[5:7,2] = GridLayout()
-    ax = Axis(g3[1,1], xlabel="Tau", ylabel="Neurodegeneration", 
+    g3 = f[3,2] = GridLayout()
+    ax = Axis(g3[1,1], xlabel="Tau", ylabel="Neuro-\ndegeneration", 
     yticks=0:0.25:1, xticks=0:0.25:1, xlabelsize=20,
     ylabelsize=20, yticklabelsize=20, xticklabelsize=20, )
     xlims!(ax, 0., 0.8)
@@ -411,18 +457,28 @@ begin
     axislegend(ax, unique=true, position=:rt,  framevisible=false, labelsize=20, patchsize=(20,20))
 
     
-    colsize!(gg, 1, 800)
+    colsize!(gg, 1, 400)
+    
     rowsize!(f.layout, 1, 200)
-    [colsize!(_g, 1, 300) for _g in g]
-    [colsize!(_g, 4, 300) for _g in g]
+    rowsize!(gm, 1, 100)
+    rowsize!(gm, 2, 100)
+    rowsize!(gm, 3, 100)
+    # [colsize!(_g, 1, 250) for _g in g]
+    # [colsize!(_g, 4, 250) for _g in g]
+    colsize!(gm, 1, 300)
+    colsize!(gm, 4, 300)
+    rowgap!(gm, 30)
+    # colsize!(gl, 1, 200)
+    # colsize!(gr, 1, 200)
 
-
-    Label(g1[1, 1, TopLeft()], "A", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
-    Label(g[1][1, 1, TopLeft()],  "B", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
+    Label(gg[1, 1, TopLeft()], "A", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
+    Label(gtr[1, 3, TopLeft()], "B", fontsize = 25, font = :bold, padding = (0, 0, 10, 0), halign = :center, tellheight=false, tellwidth=false)
+    Label(gm[1, 1, TopLeft()],  "C", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
     # Label(g[1][1, 4, TopLeft()],  "C", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
-    Label(g2[1, 1, TopLeft()], "C", fontsize = 25, font = :bold, padding = (0, 0, 10, 0), halign = :left, tellheight=false, tellwidth=false)
-    Label(g3[1, 1, TopLeft()], "D", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
-    Label(g3[2, 1, TopLeft()], "E", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
+    Label(g2[1, 1, TopLeft()], "D", fontsize = 25, font = :bold, padding = (0, 0, 10, 0), halign = :left, tellheight=false, tellwidth=false)
+    Label(g3[1, 1, TopLeft()], "E", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
+    Label(g3[2, 1, TopLeft()], "F", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
     f
 end
 save(projectdir("output/plots/pkpd/coloc-pkpd.jpeg"), f)
+
