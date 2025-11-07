@@ -43,7 +43,7 @@ meanpst = mean(pst)
 # --------------------------------------------------------------------------------
 _ab_data_df =  CSV.read(datadir("ADNI/2025/UCBERKELEY_AMY_6MM_28Jul2025.csv"), DataFrame)
 _tau_data_df = CSV.read(datadir("ADNI/2025/UCBERKELEY_TAU_6MM_28Jul2025-Ab-tau-Status.csv"), DataFrame) 
-tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-1std.csv")) |> vec
+tau_cutoffs = readdlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-2std.csv")) |> vec
 ab_threshold = readdlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/ab-thresholds.csv")) |> vec
 tau_threshold = readdlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/tau-thresholds.csv")) |> vec
 
@@ -95,14 +95,30 @@ atrophy = mean([meanpst["η[$i]", :mean] for i in 1:18]) / 12
 
 drug_concentration = 400.
 drug_transport = 1.5 / 12
-drug_effect = 0.1 / 12
-drug_clearance = 5. / 12
+drug_effect = 0.12 / 12
+drug_clearance = 6. / 12
 
 L = laplacian_matrix(c) 
 Δ = part .+ (coupling .* (fbb_ui .- fbb_u0))
 Lh = inv(diagm(vi .- v0)) * L * diagm(vi .- v0)
 
 atn_pkpd = make_scaled_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], part[1:36] .- v0[1:36], L[1:36, 1:36], Ld, m, 0)
+
+using PrettyTables  
+names = ["amyloid_production", "tau_transport", "tau_production", 
+                                        "coupling", "atrophy", 
+                                        "drug_transport", "drug_effect", 
+                                        "drug_concentration", "drug_clearance"]
+vals = [amyloid_production, tau_transport, tau_production, 
+                                        coupling, atrophy, 
+                                        drug_transport, drug_effect, 
+                                        drug_concentration, drug_clearance]
+
+df = DataFrame(:Parameter => names, :Value => vals)
+
+formatter = (v, i, j) -> round(v, digits = 3);
+
+pretty_table(df; formatters = ft_printf("%5.3f"), backend=Val(:latex))
 
 sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36);mean_fbb_init], 
                 (0.0, tmax), [amyloid_production, tau_transport, tau_production, 
@@ -439,7 +455,7 @@ begin
     cls = LinRange(0.4, 1.0, length(tau_end))
     sc = scatter!(tau_end, atr_end, color=[get(cmap, c) for c in cls], markersize=15)
 
-    ax = Axis(g3[2,1], xlabel="t0 / months", ylabel="Δ", 
+    ax = Axis(g3[2,1], xlabel="t0 / months", ylabel="Biomarker change", 
     xlabelsize=20, ylabelsize=20,xticks=collect(0:60:tmax), yticklabelsize=20, xticklabelsize=20,)
     ylims!(0, 0.055)
     xlims!(0, 370)
@@ -480,5 +496,81 @@ begin
     Label(g3[2, 1, TopLeft()], "F", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
     f
 end
-save(projectdir("output/plots/pkpd/coloc-pkpd.jpeg"), f)
+save(projectdir("output/plots/pkpd/coloc-pkpd-60cl.jpeg"), f)
 
+
+# t0s = collect(0:24:360)
+# # solidx = 1:16
+# # int_ts[solidx]
+# # t0s = int_ts[solidx]
+# int_sols = Vector{ODESolution}()
+# for (i, t) in enumerate(t0s)
+#     atn_pkpd = make_scaled_atn_pkpd_model(fbb_ui[1:36] .- fbb_u0[1:36], 
+#                                           part[1:36] .- v0[1:36], L[1:36, 1:36], Ld, m, t)
+
+#     drug_concentration = 400.
+#     drug_transport = 1.5 / 12
+#     drug_effect = 0.1 / 12
+#     drug_clearance = 5. / 12
+#     sol = simulate(atn_pkpd, [mean_fbb_init; mean_tau_init; vol_init; zeros(36); mean_fbb_init], 
+#                     (0.0, 360.0), [amyloid_production, tau_transport, tau_production, 
+#                                             coupling, atrophy, 
+#                                             drug_transport, drug_effect, 
+#                                             drug_concentration, drug_clearance]; 
+#                                             saveat=ts, tol=1e-12)
+
+#     push!(int_sols, sol)   
+# end
+
+# conc_to_suvr(c, v0, vi) = (c * (vi .- v0)) + v0
+# r_vi = vi[1:36]
+# r_v0 = v0[1:36]
+
+# trial_duration = 18
+# _inits = [placebo_sol(t) for t in t0s]
+# int_inits = [_sol(t) for (_sol,t) in zip(int_sols, t0s)]
+# int_outcome = [_sol(t + trial_duration) for (_sol,t) in zip(int_sols, t0s)]
+# placebo_outcome = [placebo_sol(t + trial_duration) for t in t0s]
+
+# frontal_rois = findall(x -> contains(get_label(x), "frontal"), cortex)
+# tau_rois = collect(37:72)
+
+# int_inits_suvr = [conc_to_suvr.(i[tau_rois], r_v0, r_vi) for i in int_inits]
+# int_outcome_suvr = [conc_to_suvr.(i[tau_rois], r_v0, r_vi) for i in int_outcome]
+# placebo_outcome_suvr = [conc_to_suvr.(i[tau_rois], r_v0, r_vi) for i in placebo_outcome]
+
+# brois = rois
+
+# int_diff = [mean(io[brois]) - mean(ii[brois]) for (io, ii) in zip(int_outcome_suvr, int_inits_suvr)]
+# placebo_diff = [mean(io[brois]) - mean(ii[brois]) for (io, ii) in zip(placebo_outcome_suvr, int_inits_suvr)]
+
+# scatter(placebo_diff .- int_diff)
+
+# begin
+#     f = Figure()
+#     ax = Axis(f[1,1])
+#     for sol in int_sols[[1,6,11,15,16]]
+#         plot!(sol, idxs=36+29)
+#     end
+#     f
+# end
+# begin
+#     CairoMakie.activate!()
+#     colors = Makie.wong_colors();
+#     # Figure and Axis
+#     colors = Makie.wong_colors()
+#     fig = Figure()
+#     ax = Axis(fig[1,1], xticks = (1:3, ["left", "middle", "right"]),
+#             title = "Dodged bars with legend")
+
+#     # Plot
+#     barplot!(reduce(vcat, [[int_diff[i],placebo_diff[i]] for i in [1, 6, 11]]))
+
+#     # Legend
+#     labels = ["group 1", "group 2", "group 3"]
+#     elements = [PolyElement(polycolor = colors[i]) for i in 1:length(labels)]
+#     title = "Groups"
+#     Legend(fig[1,2], elements, labels, title)
+#     fig
+# end
+# fig

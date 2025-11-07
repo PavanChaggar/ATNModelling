@@ -12,6 +12,7 @@ using CSV, DataFrames, ADNIDatasets
 using Serialization
 using LsqFit, Colors
 using StatisticalMeasures, Statistics
+using GLM
 # --------------------------------------------------------------------------------
 # Simulation set-up
 # --------------------------------------------------------------------------------
@@ -100,210 +101,7 @@ tau_c = ColorScheme(sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5))
 tau_c = sequential_palette(250, s = 1, c = 0.9, w =0.25, b = 0.25)
 atr_c = sequential_palette(15, s = 0.9, c = 0.9, w =0.25, b = 0.5);
 
-# begin
-#     GLMakie.activate!()
-#     f = Figure(size=(1350, 1200))
-#     cols = Makie.wong_colors()
-
-#     gt  = f[1,1] = GridLayout()
-#     gb  = f[2, 1] = GridLayout()
-#     gt1 = gt[1, 1] = GridLayout()
-#     gt2 = gt[1, 2] = GridLayout()
-#     gt3 = gt[1, 3] = GridLayout()
-
-#     g1 = gb[1, 1] = GridLayout()
-#     g2 = gb[2, 1] = GridLayout()
-#     g3 = gb[3, 1] = GridLayout()
-    
-#     # AB carrying capacities
-#     cmap = ColorSchemes.viridis;
-#     d = (ui .- minimum(ui)) ./ (maximum(ui) .- minimum(ui))
-#     ax = Axis3(gt1[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax)
-#     hidespines!(ax)
-#     plot_roi!(nodes, d[1:36], cmap)
-#     ax = Axis3(gt1[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax)
-#     hidespines!(ax)
-#     plot_roi!(nodes, d[1:36], cmap)
-
-#     Colorbar(gt1[2, 1:2], limits = (minimum(ui), maximum(ui)), colormap = cmap,
-#     vertical = false, label = "Aβ SUVR", labelsize=25, flipaxis=false,
-#     ticklabelsize=25, ticks=0.8:0.1:1.4)
-
-#     d = (vi .- minimum(vi)) ./ (maximum(vi) .- minimum(vi))
-#     ax = Axis3(gt2[1,1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax)
-#     hidespines!(ax)
-#     plot_roi!(nodes, d[1:36], cmap)
-#     ax = Axis3(gt2[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
-#     hidedecorations!(ax)
-#     hidespines!(ax)
-#     plot_roi!(nodes, d[1:36], cmap)
-
-#     Colorbar(gt2[2, 1:2], limits = (minimum(vi), maximum(vi)), colormap = cmap,
-#     vertical = false, label = "tau SUVR", labelsize=25, flipaxis=false,
-#     ticklabelsize=25, ticks=2.2:0.4:3.8)
-
-#     # AB vs tau correlation 
-#     cmap = Makie.wong_colors()
-#     v0, vi, part = load_tau_params(tracer="FTP")
-#     bf_v0, bf_vi, bf_part = load_tau_params(tracer="RO")
-#     fbb_u0, fbb_ui = load_ab_params(tracer="FBB")
-#     fbp_u0, fbp_ui = load_ab_params(tracer="FBP")
-#     fmm_u0, fmm_ui = load_ab_params(tracer="FMM")
-    
-#     xs = collect(0:0.1:1.8)
-#     linearmodel(x, p) = p[1] .* x
-#     fbb_fitted_model = curve_fit(linearmodel, fbb_ui .- fbb_u0, vi .- part, [1.0]);
-#     println(fbb_fitted_model.param)
-#     println(rsquared(linearmodel(fbb_ui .- fbb_u0, fbb_fitted_model.param), vi .- part))
-#     fbp_fitted_model = curve_fit(linearmodel, fbp_ui .- fbp_u0, vi .- part, [1.0])
-#     println(fbp_fitted_model.param)
-#     println(rsquared(linearmodel(fbp_ui .- fbp_u0, fbp_fitted_model.param), vi .- part))
-#     bf_fitted_model = curve_fit(linearmodel, fmm_ui .- fmm_u0, bf_vi .- bf_part, [1.0])
-#     println(fbp_fitted_model.param)
-#     println(rsquared(linearmodel(fmm_ui .- fmm_u0, bf_fitted_model.param), bf_vi .- bf_part))
-#     ax = Axis(gt3[1,1], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", xticks=0:0.5:1.5, xlabelsize=25, 
-#                 ylabelsize=25, xticklabelsize=25, yticklabelsize=25)
-#     xlims!(ax, 0, 1.5)
-#     ylims!(ax, 0, 4)
-#     scatter!(fbb_ui .- fbb_u0, vi .- part, color=alphacolor(cmap[1], 0.5), markersize=15, label="FBB")
-#     lines!(xs, linearmodel(xs, fbb_fitted_model.param), color=alphacolor(cmap[1], 0.5), linewidth=5)
-#     scatter!(fbp_ui .- fbp_u0, vi .- part, color=alphacolor(cmap[2], 0.5), markersize=15, label="FBP")
-#     lines!(xs, linearmodel(xs, fbp_fitted_model.param), color=alphacolor(cmap[2], 0.5), linewidth=5)
-#     scatter!(fmm_ui .- fmm_u0, bf_vi .- bf_part, color=alphacolor(cmap[3], 0.5), markersize=15, label="FMM")
-#     lines!(xs, linearmodel(xs, bf_fitted_model.param), color=alphacolor(cmap[3], 0.5), linewidth=5)
-#     axislegend(ax, position=:rb, fontsize=25)
-#     ax.alignmode = Mixed(right = 0)
-
-#     # ATN trajectories
-#     abcmap = ColorScheme(ab_c);
-#     taucmap = ColorScheme(tau_c); #reverse(ColorSchemes.RdYlBu);
-#     atrcmap = ColorScheme(atr_c); #ColorSchemes.Reds;
-
-#     ab_col = get(abcmap, 0.75)
-#     tau_col = get(taucmap, 0.75)
-#     atr_col = get(atrcmap, 0.75)
-    
-#     for i in 1:5
-#         absol = (sol_ts[i][1:72] .- minimum(u0)) ./ (maximum(ui) .- minimum(u0))
-#         tausol = (sol_ts[i][73:144] .- minimum(v0)) ./ (maximum(_vi) .- minimum(v0))
-#         atrsol = sol_ts[i][145:216]
-        
-#         ax = Axis3(g1[1,i+2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-#         hidedecorations!(ax)
-#         hidespines!(ax)
-#         plot_roi!(nodes, absol, abcmap)
-#         ax = Axis3(g1[2,i+2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-#         hidedecorations!(ax)
-#         hidespines!(ax)
-#         plot_roi!(nodes, absol, abcmap)
-        
-#         ax = Axis3(g2[1,i+2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-#         hidedecorations!(ax)
-#         hidespines!(ax)
-#         plot_roi!(nodes, tausol, taucmap)
-#         ax = Axis3(g2[2,i+2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-#         hidedecorations!(ax)
-#         hidespines!(ax)
-#         plot_roi!(nodes, tausol, taucmap)
-
-#         ax = Axis3(g3[1,i+2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-#         hidedecorations!(ax)
-#         hidespines!(ax)
-#         plot_roi!(nodes, atrsol, atrcmap)
-#         ax = Axis3(g3[2,i+2], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
-#         hidedecorations!(ax)
-#         hidespines!(ax)
-#         plot_roi!(nodes, atrsol, atrcmap)
-#     end
-#     cb = Colorbar(g1[1:2, 8], limits = (minimum(u0), 1.4), colormap = abcmap,
-#             vertical = true, labelsize=20, flipaxis=true, ticks=collect(0.6:0.2:1.4),
-#             ticksize=18, ticklabelsize=20, labelpadding=10)
-#     cb.alignmode = Mixed(right = 0 )
-#     cb = Colorbar(g2[1:2, 8], limits = (minimum(v0)-0.1, 3.5), colormap = taucmap,
-#             vertical = true, labelsize=20, flipaxis=true, ticks=collect(1.0:0.5:4.0),
-#             ticksize=18, ticklabelsize=20, labelpadding=10)
-#     cb.alignmode = Mixed(right = 0 )
-#     cb = Colorbar(g3[1:2, 8], limits = (0, 1), colormap = atrcmap,
-#             vertical = true, labelsize=20, flipaxis=true, ticks=collect(0:0.2:1.0),
-#             ticksize=18, ticklabelsize=20, labelpadding=10)
-#     cb.alignmode = Mixed(right = 0 )
-
-
-#     ts = LinRange(0.0, 24, 5)
-
-#     ax = GLMakie.Axis(g1[1:2,1:2],
-#             xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
-#             xticklabelsize = 25, xticks = ts, xticksize=10,
-#             xlabel="Time / years", xlabelsize = 25,
-#             yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
-#             yticklabelsize = 25, yticksize=10,
-#             ylabel="SUVR", ylabelsize = 25, yticks=collect(0.6:0.2:1.4)
-#     )
-#     hidexdecorations!(ax, ticks=false, grid=false)
-#     GLMakie.ylims!(ax, minimum(u0), 1.4)
-#     GLMakie.xlims!(ax, 0, 24)
-#     # vlines!(ax, sol.t[coloc_t[2]], color=:black, linewidth=2.0, linestyle=:dash)
-#     for i in 1:36
-#         lines!(sol.t, sol[i, :], linewidth=2.0, color=alphacolor(ab_col, 0.5))
-#     end
-
-#     ax = GLMakie.Axis(g2[1:2,1:2],
-#             xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
-#             xticklabelsize = 25, xticks = ts, xticksize=10,
-#             xlabel="Time / years", xlabelsize = 25,
-#             yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
-#             yticklabelsize = 25, yticksize=10,
-#             ylabel="SUVR", ylabelsize = 25, yticks=collect(1.0:0.5:4.0)
-#         )
-#     hidexdecorations!(ax, ticks=false, grid=false)
-#     GLMakie.ylims!(ax, minimum(v0)-0.1, 3.5)
-#     GLMakie.xlims!(ax, 0, 24)
-#     # vlines!(ax, sol.t[coloc_t[2]], color=:black, linewidth=2.0, linestyle=:dash)
-#     for i in 1:36
-#         lines!(sol.t, sol[i + 72, :], linewidth=2.0, color=alphacolor(tau_col, 0.5))
-#     end
-
-#     ax = GLMakie.Axis(g3[1:2,1:2],
-#             xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
-#             xticklabelsize = 25, xticks = ts, xticksize=10,
-#             xlabel="Time / years", xlabelsize = 25,
-#             yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
-#             yticklabelsize = 25, yticksize=10,
-#             ylabel="Atr.", ylabelsize = 25, yticks=collect(0:0.2:1.0)
-#         )
-#     GLMakie.ylims!(ax, 0, 1.0)
-#     GLMakie.xlims!(ax, 0, 24)
-#     # vlines!(ax, sol.t[coloc_t[2]], color=:black, linewidth=2.0, linestyle=:dash)
-#     for i in 1:36
-#         lines!(sol.t, sol[i+144, :], linewidth=2.0, color=alphacolor(atr_col, 0.5))
-#     end
-#     Label(g1[1:2,0], "A", fontsize=30, tellheight=false)
-#     Label(g2[1:2,0], "T", fontsize=30, tellheight=false)
-#     Label(g3[1:2,0], "N", fontsize=30, tellheight=false)
-    
-#     rowsize!(f.layout, 1, 200)
-#     rowgap!(f.layout, 1, 50)
-#     colgap!(gt, 1, 50)
-#     colgap!(gt, 2, 50)
-
-#     colsize!(gt, 1, 400)
-#     colsize!(gt, 2, 400)
-#     colsize!(gt, 3, 300)
-
-
-#     Label(gt1[1, 1, TopLeft()], "A", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
-#     Label(gt2[1, 1, TopLeft()], "B", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
-#     Label(gt3[1, 1, TopLeft()], "C", fontsize = 26, font = :bold, padding = (-40, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
-#     Label(gb[1, 1, TopLeft()], "D", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
-    
-#     f
-# end
-# save(projectdir("output/plots/simulation/atn-simulation-all.jpeg"), f)
-
-  # AB vs tau correlation 
+# AB vs tau correlation 
 cmap = Makie.wong_colors()
 v0, vi, part = load_tau_params(tracer="FTP")
 bf_v0, bf_vi, bf_part = load_tau_params(tracer="RO")
@@ -313,6 +111,24 @@ fmm_u0, fmm_ui = load_ab_params(tracer="FMM")
 
 xs = collect(0:0.1:1.8)
 linearmodel(x, p) = p[1] .* x
+# tracer_df = DataFrame(fbb_ui = fbb_ui .- fbb_u0, 
+#                     fbp_ui = fbp_ui .- fbp_u0, 
+#                     fmm_ui = fmm_ui .- fmm_u0, 
+#                     ftp_vi = vi .- part, 
+#                     ro_vi = bf_vi - bf_part)
+
+# fbb_ftp = lm(@formula(  ftp_vi ~ fbb_ui), df)
+# fbp_ftp = lm(@formula(  ftp_vi ~ fbp_ui), df)
+# fmm_ro  = lm(@formula(  ro_vi ~ fmm_ui), df)
+
+# testdf = DataFrame(fbb_ui = LinRange(0.0, 1.2, 100),
+#                    fbp_ui = LinRange(0.0, 1.2, 100),
+#                    fmm_ui = LinRange(0.0, 1.2 ,100))
+
+# fbb_pred = predict(fbb_ftp, testdf, interval=:prediction, level=0.95)
+# fbp_pred = predict(fbp_ftp, testdf, interval=:prediction, level=0.95)
+# fmm_pred = predict(fmm_ro, testdf, interval=:prediction, level=0.95)
+
 fbb_fitted_model = curve_fit(linearmodel, fbb_ui .- fbb_u0, vi .- part, [1.0]);
 println(fbb_fitted_model.param)
 println(rsquared(linearmodel(fbb_ui .- fbb_u0, fbb_fitted_model.param), vi .- part))
@@ -367,14 +183,14 @@ begin
     plot_roi!(nodes, d[1:36], cmap)
 
     Colorbar(g1[4, 1:2], limits = (minimum(vi), maximum(vi)), colormap = cmap,
-    vertical = false, label = "tau SUVR", labelsize=25, flipaxis=false,
+    vertical = false, label = "Tau SUVR", labelsize=25, flipaxis=false,
     ticklabelsize=25, ticks=2.2:0.4:3.8)
 
     # Axis(g1[1,1])
     # Axis(g1[2,1])
     # Axis(g1[3,1])
     # Axis(g1[4,1])
-    ax = Axis(g2[1,1], xlabel= "Time / years", ylabel="Tau Conentration", yticks=0:0.25:1, xticks=0:10:30, 
+    ax = Axis(g2[1,1], xlabel= "Time / years", ylabel="Tau Concentration", yticks=0:0.25:1, xticks=0:10:30, 
               ylabelsize=25, xlabelsize=25, yticklabelsize=25, xticklabelsize=25)
     xlims!(ax, 0, 30)
     ylims!(ax, 0, 1)
@@ -388,29 +204,37 @@ begin
     ax.alignmode = Mixed(left = 0)
 
     cmap = Makie.wong_colors()
-    ax = Axis(g3[1,1], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", xticks=0:0.5:1.5, xlabelsize=25, 
+    ax = Axis(g3[1,1], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", title="FBB vs FTP", titlesize=25,titlefont=:regular, yticks=0:1:3, xticks=0:0.5:1.5, xlabelsize=25, 
                 ylabelsize=25, xticklabelsize=25, yticklabelsize=25)
     xlims!(ax, 0, 1.25)
     ylims!(ax, 0, 3.5)
     scatter!(fbb_ui .- fbb_u0, vi .- part, color=alphacolor(cmap[1], 0.5), markersize=15, label="FBB")
     lines!(xs, linearmodel(xs, fbb_fitted_model.param), color=alphacolor(cmap[1], 0.5), linewidth=5)
-    axislegend(ax, position=:rb, fontsize=25)
-    ax = Axis(g3[1,2], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", xticks=0:0.5:1.5, xlabelsize=25, 
+    CairoMakie.text!(ax, 0.2, 0.8, text= L"R^{2} = %$(round(rsquared(linearmodel(fbb_ui .- fbb_u0, fbb_fitted_model.param), vi .- part), sigdigits=2))", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=25)
+
+    # lines!(ax,  testdf.fbb_ui, fbb_pred.prediction, color=(cmap[1], 0.2))
+
+    axislegend(ax, position=:rb, fontsize=30)
+    ax = Axis(g3[1,2], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", title="FBP vs FTP", titlesize=25,titlefont=:regular, yticks=0:1:3, xticks=0:0.5:1.5, xlabelsize=25, 
                 ylabelsize=25, xticklabelsize=25, yticklabelsize=25)
     xlims!(ax, 0, 1.25)
     ylims!(ax, 0, 3.5)
     hideydecorations!(ax, grid=false, ticks=false)
     scatter!(fbp_ui .- fbp_u0, vi .- part, color=alphacolor(cmap[2], 0.5), markersize=15, label="FBP")
     lines!(xs, linearmodel(xs, fbp_fitted_model.param), color=alphacolor(cmap[2], 0.5), linewidth=5)
-    axislegend(ax, position=:rb, fontsize=25)
-    ax = Axis(g3[1,3], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", xticks=0:0.5:1.5, xlabelsize=25, 
+    CairoMakie.text!(ax, 0.2, 0.8, text= L"R^{2} = %$(round(rsquared(linearmodel(fbp_ui .- fbp_u0, fbp_fitted_model.param), vi .- part), sigdigits=2))", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=25)
+    # lines!(ax,  testdf.fbp_ui, fbp_pred.prediction, color=(cmap[1], 0.2))
+    axislegend(ax, position=:rb, fontsize=30)
+    ax = Axis(g3[1,3], xlabel="b.c. Aβ SUVR", ylabel="b.c. Tau SUVR", title="FMM vs RO948", titlesize=25,titlefont=:regular, yticks=0:1:3, xticks=0:0.5:1.5, xlabelsize=25, 
                 ylabelsize=25, xticklabelsize=25, yticklabelsize=25)
     xlims!(ax, 0, 1.25)
     ylims!(ax, 0, 3.5)
     hideydecorations!(ax, grid=false, ticks=false)
     scatter!(fmm_ui .- fmm_u0, bf_vi .- bf_part, color=alphacolor(cmap[3], 0.5), markersize=15, label="FMM")
     lines!(xs, linearmodel(xs, bf_fitted_model.param), color=alphacolor(cmap[3], 0.5), linewidth=5)
-    axislegend(ax, position=:rb, fontsize=25)
+    CairoMakie.text!(ax, 0.2, 0.8, text= L"R^{2} = %$(round(rsquared(linearmodel(fmm_ui .- fmm_u0, bf_fitted_model.param), bf_vi .- bf_part), sigdigits=2))", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=25)
+    # lines!(ax,  testdf.fmm_ui, fmm_pred.prediction, color=(cmap[1], 0.2))
+    axislegend(ax, position=:rb, fontsize=30)
 
     abcmap = ColorScheme(ab_c);
     taucmap = ColorScheme(tau_c); #reverse(ColorSchemes.RdYlBu);
@@ -505,7 +329,7 @@ begin
             xlabel="Time / years", xlabelsize = 25,
             yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
             yticklabelsize = 25, yticksize=10,
-            ylabel="Atr.", ylabelsize = 25, yticks=collect(0:0.2:1.0)
+            ylabel="Neurodegeneration", ylabelsize = 25, yticks=collect(0:0.2:1.0)
         )
     GLMakie.ylims!(ax, 0, 1.0)
     GLMakie.xlims!(ax, 0, 30)
@@ -523,12 +347,129 @@ begin
     colgap!(G, 1, 60)
     rowgap!(G2, 1, 30)
 
-    Label(g1[1, 1, TopLeft()], "A", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
+    Label(g1[1, 1, TopLeft()], "A", fontsize = 26, font = :bold, padding = (0, 0, 40, 0), halign = :left, tellheight=false, tellwidth=false)
     Label(g1[3, 1, TopLeft()], "B", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
-    Label(g3[1, 1, TopLeft()], "C", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
+    Label(g3[1, 1, TopLeft()], "C", fontsize = 26, font = :bold, padding = (0, 0, 10, 0), halign = :left, tellheight=false, tellwidth=false)
     Label(g2[1, 1, TopLeft()], "D", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
     Label(g4[1, 1, TopLeft()], "E", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
     
-    f
+    
 end
 save(projectdir("output/plots/simulation/atn-simulation-all.jpeg"), f)
+
+begin
+    params = [α_a, ρ_t, α_t, 0, η]
+
+    sol = simulate(func, inits, tspan, params; saveat=0.1)
+    sol_ts = simulate(func, inits, tspan, params; saveat=ts)
+    
+    f = Figure(size=(1000,800))
+    g4 = f[1,1] = GridLayout()
+
+
+    abcmap = ColorScheme(ab_c);
+    taucmap = ColorScheme(tau_c); #reverse(ColorSchemes.RdYlBu);
+    atrcmap = ColorScheme(atr_c); #ColorSchemes.Reds;
+
+    ab_col = get(abcmap, 0.75)
+    tau_col = get(taucmap, 0.75)
+    atr_col = get(atrcmap, 0.75)
+    
+    for i in 1:4
+        absol = (sol_ts[i][1:36] .- minimum(u0[1:36])) ./ (maximum(ui[1:36]) .- minimum(u0[1:36]))
+        tausol = (sol_ts[i][73:73+35] .- minimum(v0[1:36])) ./ (maximum(_vi[1:36]) .- minimum(v0[1:36]))
+        atrsol = sol_ts[i][145:145+35]
+        
+        ax = Axis3(g4[1,i+1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, absol, abcmap)
+        ax = Axis3(g4[2,i+1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, absol, abcmap)
+        
+        ax = Axis3(g4[3,i+1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, tausol, taucmap)
+        ax = Axis3(g4[4,i+1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, tausol, taucmap)
+
+        ax = Axis3(g4[5,i+1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, atrsol, atrcmap)
+        ax = Axis3(g4[6,i+1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
+        hidedecorations!(ax)
+        hidespines!(ax)
+        plot_roi!(nodes, atrsol, atrcmap)
+    end
+     cb = Colorbar(g4[1:2, 6], limits = (minimum(u0), 1.4), colormap = abcmap,
+            vertical = true, labelsize=20, flipaxis=true, ticks=collect(0.6:0.2:1.4),
+            ticksize=18, ticklabelsize=20, labelpadding=10)
+    cb.alignmode = Mixed(right = 0 )
+    cb = Colorbar(g4[3:4, 6], limits = (minimum(v0)-0.1, 3.5), colormap = taucmap,
+            vertical = true, labelsize=20, flipaxis=true, ticks=collect(1.0:0.5:4.0),
+            ticksize=18, ticklabelsize=20, labelpadding=10)
+    cb.alignmode = Mixed(right = 0 )
+    cb = Colorbar(g4[5:6, 6], limits = (0, 1), colormap = atrcmap,
+            vertical = true, labelsize=20, flipaxis=true, ticks=collect(0:0.2:1.0),
+            ticksize=18, ticklabelsize=20, labelpadding=10)
+    cb.alignmode = Mixed(right = 0 )
+
+    ts = LinRange(0.0, 30, 4)
+
+    ax = GLMakie.Axis(g4[1:2,1],
+            xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
+            xticklabelsize = 25, xticks = ts, xticksize=10,
+            xlabel="Time / years", xlabelsize = 25,
+            yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
+            yticklabelsize = 25, yticksize=10,
+            ylabel="Aβ SUVR", ylabelsize = 25, yticks=collect(0.6:0.2:1.4)
+    )
+    hidexdecorations!(ax, ticks=false, grid=false)
+    GLMakie.ylims!(ax, minimum(u0), 1.4)
+    GLMakie.xlims!(ax, 0, 30)
+    # vlines!(ax, sol.t[coloc_t[2]], color=:black, linewidth=2.0, linestyle=:dash)
+    for i in 1:36
+        lines!(sol.t, sol[i, :], linewidth=2.0, color=alphacolor(ab_col, 0.5))
+    end
+
+    ax = GLMakie.Axis(g4[3:4,1],
+            xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
+            xticklabelsize = 25, xticks = ts, xticksize=10,
+            xlabel="Time / years", xlabelsize = 25,
+            yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
+            yticklabelsize = 25, yticksize=10,
+            ylabel="Tau SUVR", ylabelsize = 25, yticks=collect(1.0:0.5:4.0)
+        )
+    hidexdecorations!(ax, ticks=false, grid=false)
+    GLMakie.ylims!(ax, minimum(v0)-0.1, 3.5)
+    GLMakie.xlims!(ax, 0, 30)
+    # vlines!(ax, sol.t[coloc_t[2]], color=:black, linewidth=2.0, linestyle=:dash)
+    for i in 1:36
+        lines!(sol.t, sol[i + 72, :], linewidth=2.0, color=alphacolor(tau_col, 0.5))
+    end
+
+    ax = GLMakie.Axis(g4[5:6,1],
+            xautolimitmargin = (0, 0), xgridcolor = (:grey, 0.5), xgridwidth = 2,
+            xticklabelsize = 25, xticks = ts, xticksize=10,
+            xlabel="Time / years", xlabelsize = 25,
+            yautolimitmargin = (0, 0), ygridcolor = (:grey, 0.5), ygridwidth = 2,
+            yticklabelsize = 25, yticksize=10,
+            ylabel="Neurodegeneration", ylabelsize = 25, yticks=collect(0:0.2:1.0)
+        )
+    GLMakie.ylims!(ax, 0, 1.0)
+    GLMakie.xlims!(ax, 0, 30)
+    # vlines!(ax, sol.t[coloc_t[2]], color=:black, linewidth=2.0, linestyle=:dash)
+    for i in 1:36
+        lines!(sol.t, sol[i+144, :], linewidth=2.0, color=alphacolor(atr_col, 0.5))
+    end
+    colsize!(g4, 1, 250)
+
+    # f
+end
+save(projectdir("output/plots/simulation/atn-simulation-no-interaction.jpeg"), f)

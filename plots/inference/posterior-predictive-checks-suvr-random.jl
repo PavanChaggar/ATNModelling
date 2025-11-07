@@ -193,7 +193,9 @@ plot(sol, idxs=73:144)
 # bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-bf-fixed-beta-lognormal-1x1000.jls"));
 adni_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-1x1000.jls"));
 adni_pst = chainscat([deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-4x1000-$i.jls")) for i in 1:4]...)
-bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-bf-random-lognormal-dense-1x1000.jls"));
+bf_pst = chainscat([deserialize(projectdir("output/chains/population-atn/pst-samples-bf-random-lognormal-dense-1x1000-$i.jls")) for i in 1:4]...)
+
+# bf_pst = deserialize(projectdir("output/chains/population-atn/pst-samples-bf-random-lognormal-dense-1x1000.jls"));
 
 summarize(adni_pst)
 summarize(bf_pst)
@@ -327,7 +329,6 @@ bf_mean_ab_diff = vec(mean(reduce(hcat, get_diff.(bf_ab_suvr)), dims=2))
 bf_mean_tau_diff = vec(mean(reduce(hcat, get_diff.(bf_tau_suvr)), dims=2))
 bf_mean_atr_diff = vec(mean(reduce(hcat, get_diff.(bf_vols)), dims=2))
 
-
 bf_results = DataFrame(
         mean_ab_sols = bf_mean_ab_sols, 
         mean_tau_sols = bf_mean_tau_sols,
@@ -351,7 +352,7 @@ using GLM
 # Label(f[0, 2], "Tau", tellwidth=false, fontsize=35)
 # Label(f[0, 3], "Neurodegeneration", tellwidth=false, fontsize=35)
 # Label(f[1, 0], "ADNI", tellwidth=true, tellheight=false, fontsize=35)
-# Label(f[2, 0], "BF-2", tellwidth=true, tellheight=false, fontsize=35)
+# Label(f[2, 0], "BF2", tellwidth=true, tellheight=false, fontsize=35)
 
 # rois = reduce(vcat, bs[1:3])
 
@@ -392,17 +393,17 @@ begin
         hist!(vec(Array(adni_pst[:Am_a])), bins=15, color=alphacolor(get(abcmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         hidexdecorations!(ax, grid=false, ticks=false)
     
-        ax = Axis(g1[1,2], xticks=0:0.04:0.08,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="ρ \n tau transport", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
+        ax = Axis(g1[1,2], xticks=0:0.05:0.15,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="ρ \n tau transport", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
-        xlims!(ax, 0.0,0.1)
+        xlims!(ax, 0.0,0.17)
         hist!(vec(Array(adni_pst[:Pm_t])), bins=15, color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         hidexdecorations!(ax, grid=false, ticks=false)
     
-        ax = Axis(g1[1,3],  xticks=0:0.05:0.1,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="γ \n tau production", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
+        ax = Axis(g1[1,3],  xticks=0:0.05:0.15,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="γ \n tau production", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
-        xlims!(ax, 0.0,0.125)
+        xlims!(ax, 0.0,0.17)
         hist!(vec(Array(adni_pst[:Am_t])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         hidexdecorations!(ax, grid=false, ticks=false)
     
@@ -416,7 +417,7 @@ begin
         hidexdecorations!(ax, grid=false, ticks=false)
         axislegend(ax, position=:lt, labelsize=20)
 
-        ax = Axis(g1[1,5], xticks=0.0:0.05:0.2,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="η \n atrophy rate", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
+        ax = Axis(g1[1,5], xticks=0.0:0.05:0.2,  xticklabelsize=25, xlabel=L"1 / yr", xlabelsize=25,titlesize=titlesize, title="η \n neurodegen. rate", ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20, titlefont=:regular)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
         hidexdecorations!(ax, grid=false, ticks=false)
@@ -430,16 +431,16 @@ begin
         CairoMakie.xlims!(ax, 0.0,0.5)
         hist!(vec(Array(bf_pst[:Am_a])), bins=15, color=alphacolor(get(abcmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         
-        ax = Axis(g1[2,2], xticks=0:0.04:0.08, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+        ax = Axis(g1[2,2], xticks=0:0.05:0.15, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
-        xlims!(ax, 0.0,0.1)
-        hist!(vec(Array(bf_pst[:Pm_t])), bins=25, color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
+        xlims!(ax, 0.0,0.17)
+        hist!(vec(Array(bf_pst[:Pm_t])), bins=15, color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         
-        ax = Axis(g1[2,3],  xticks=0:0.05:0.1, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
+        ax = Axis(g1[2,3],  xticks=0:0.05:0.15, xticklabelsize=25, xlabel="1 / yr", xlabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
         hidespines!(ax, :l, :t, :r)
         hideydecorations!(ax, label=false)
-        xlims!(ax, 0.0,0.125)
+        xlims!(ax, 0.0,0.17)
         hist!(vec(Array(bf_pst[:Am_t])), bins=15,color=alphacolor(get(taucmap, 0.75), 1.0), strokecolor=:white, strokewidth=1)
         
         ax = Axis(g1[2,4], xticks=4:0.5:6, xticklabelsize=25,titlesize=titlesize, ylabelrotation=2pi, ylabelsize=50, ylabelpadding=20)
@@ -557,7 +558,7 @@ begin
                         Label(g2[0, 2], "Tau", tellwidth=false, fontsize=30)
                         Label(g2[0, 3], "Aβ", tellwidth=false, fontsize=30)
                         Label(g2[0, 4], "Tau", tellwidth=false, fontsize=30)
-                        Label(g2[0, 5], "Neurodeg.", tellwidth=false, fontsize=30)
+                        Label(g2[0, 5], "Neurodegen.", tellwidth=false, fontsize=30)
                 end
 
                 labels = ["Braak 1", "Braak 2/3", "Braak 4", "Braak 5", "Braak 6"]
@@ -629,10 +630,10 @@ begin
         colsize!(f.layout, 2, 1325)
         Label(g0[1, 1, Top()], "A", fontsize = 40, font = :bold, padding = (50, 0, 0, -70), halign = :center, tellheight=false, tellwidth=false)
         Label(g0[1, 1, ], "ADNI", fontsize = 35, padding = (0, 0, 0, -110), halign = :center, tellheight=false, tellwidth=true, rotation=pi/2)
-        Label(g0[2, 1, ], "BF-2", fontsize = 35, padding = (0, 0, 0, -250), halign = :center, tellheight=false, tellwidth=true, rotation=pi/2)
+        Label(g0[2, 1, ], "BF2", fontsize = 35, padding = (0, 0, 0, -250), halign = :center, tellheight=false, tellwidth=true, rotation=pi/2)
         Label(g0[3, 1, Top()], "B", fontsize = 40, font = :bold, padding = (50, 0, 0, -120), halign = :center, tellheight=false, tellwidth=false)
         Label(g0[3, 1, ], "ADNI", fontsize = 35, padding = (0, 0, 0, -110), halign = :center, tellheight=false, tellwidth=true, rotation=pi/2)
-        Label(g0[4, 1, ], "BF-2", fontsize = 35, padding = (0, 0, 0, -225), halign = :center, tellheight=false, tellwidth=true, rotation=pi/2)
+        Label(g0[4, 1, ], "BF2", fontsize = 35, padding = (0, 0, 0, -225), halign = :center, tellheight=false, tellwidth=true, rotation=pi/2)
         f
 end
 save(projectdir("output/plots/inference/pst-pstpred-harmonised-suvr-adni-bf-random-lognormal.png"),f)
@@ -655,7 +656,7 @@ save(projectdir("output/plots/inference/pst-pstpred-harmonised-suvr-adni-bf-rand
 #     Label(f[0, 2], "Tau", tellwidth=false, fontsize=35)
 #     Label(f[0, 3], "Neurodegeneration", tellwidth=false, fontsize=35)
 #     Label(f[1, 0], "ADNI", tellwidth=true, tellheight=false, fontsize=35)
-#     Label(f[2, 0], "BF-2", tellwidth=true, tellheight=false, fontsize=35)
+#     Label(f[2, 0], "BF2", tellwidth=true, tellheight=false, fontsize=35)
 
 #     ax1 =CairoMakie.Axis(f[1,1],  
 #             xlabel="Observation", 

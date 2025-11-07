@@ -506,6 +506,7 @@ end
 save(projectdir("output/plots/pkpd/coloc-pkpd-360-tau-time.jpeg"), fig)
 
 t0s = collect(0:24:360)
+solidx = 1:16
 int_ts[solidx]
 t0s = int_ts[solidx]
 int_sols = Vector{ODESolution}()
@@ -527,18 +528,28 @@ for (i, t) in enumerate(t0s)
     push!(int_sols, sol)   
 end
 
+conc_to_suvr(c, v0, vi) = (c * (vi .- v0)) + v0
+r_vi = vi[1:36]
+r_v0 = v0[1:36]
+
 trial_duration = 18
 _inits = [sol(t) for t in t0s]
 int_inits = [_sol(t) for (_sol,t) in zip(int_sols, t0s)]
 int_outcome = [_sol(t + 18) for (_sol,t) in zip(int_sols, t0s)]
 placebo_outcome = [sol(t + 18) for t in t0s]
 
-frontal_rois = findall(x -> contains(x, "frontal"), get_label.(cortex)) .+ 36
-brois = rois  .+ 36
-int_diff = [mean(io[brois]) - mean(ii[brois]) for (io, ii) in zip(int_outcome, int_inits)]
-placebo_diff = [mean(io[brois]) - mean(ii[brois]) for (io, ii) in zip(placebo_outcome, int_inits)]
+frontal_rois = findall(x -> contains(get_label(x), "frontal"), cortex)
+tau_rois = collect(37:72)
 
-scatter(placebo_diff .- int_diff)
+int_inits_suvr = [conc_to_suvr.(i[tau_rois], r_v0, r_vi) for i in int_inits]
+int_outcome_suvr = [conc_to_suvr.(i[tau_rois], r_v0, r_vi) for i in int_outcome]
+placebo_outcome_suvr = [conc_to_suvr.(i[tau_rois], r_v0, r_vi) for i in placebo_outcome]
+
+brois = rois
+
+int_diff = [mean(io[brois]) - mean(ii[brois]) for (io, ii) in zip(int_outcome_suvr, int_inits_suvr)]
+placebo_diff = [mean(io[brois]) - mean(ii[brois]) for (io, ii) in zip(placebo_outcome_suvr, int_inits_suvr)]
+
 begin
     CairoMakie.activate!()
     colors = Makie.wong_colors();
@@ -549,7 +560,7 @@ begin
             title = "Dodged bars with legend")
 
     # Plot
-    barplot!(reduce(vcat, [[int_diff[i],placebo_diff[i]] for i in 1:16]))
+    barplot!(reduce(vcat, [[int_diff[i],placebo_diff[i]] for i in [1, 5, 12]]))
 
     # Legend
     labels = ["group 1", "group 2", "group 3"]
@@ -561,7 +572,7 @@ begin
 end
 fig
 
-solidx = [1, 3, 6, 10, 16]
+# solidx = [1, 3, 6, 10, 16]
 # begin
 #     GLMakie.activate!()
 #     cmap = ColorSchemes.Blues

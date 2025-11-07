@@ -471,7 +471,7 @@ with a given `tau_threshold` and `ab_threshold`.
 function calculate_colocalisation_order(parc::Parcellation, pst::Chains, model, inits, tau_threshold, ab_threshold; tracer)
     meanpst = mean(pst)
     params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], meanpst[tracer, :mean], meanpst[:Em, :mean]
-    # params = mean([get_sub_params(pst, 1:18, i) for i in 1:n_samples])
+    # params = mean([get_sub_params(pst, 1:18, i) for i in 1:1000])
     _calculate_colocalisation_order(parc::Parcellation, params, model, inits, tau_threshold, ab_threshold)
 end
 
