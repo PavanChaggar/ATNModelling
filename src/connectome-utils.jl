@@ -101,16 +101,15 @@ distance(x::Vector{Float64}, y::Vector{Float64}) = norm(x .- y, 2)
 Returns a Matrix{Float64} corresponding to the Laplacian matrix of a graph G = (V, E), where v in V 
 are regions in the DK atlas and e in E are edges corresponding to inverse squared Euclidean distance.
 """
-function get_distance_laplacian(; hemisphere = "right")
+function get_distance_laplacian()
     parc = get_parcellation() |> get_cortex
-    cortex = filter(x -> get_hemisphere(x) == hemisphere, parc)
 
-    coords = get_coords(cortex)
+    coords = get_coords(parc)
 
-    distance_matrix = reduce(hcat, [[distance(coords[j,:], coords[i,:]) for i in 1:36] for j in 1:36])
+    distance_matrix = reduce(hcat, [[distance(coords[j,:], coords[i,:]) for i in 1:72] for j in 1:72])
     inv_distance_matrix = replace(1 ./ (distance_matrix).^2, Inf => 0)
     _D = inv_distance_matrix ./ maximum(inv_distance_matrix)
-    Ld = diagm(_D * ones(36)) - _D
+    Ld = diagm(_D * ones(72)) - _D
 
     return Ld
 end
