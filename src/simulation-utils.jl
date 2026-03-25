@@ -68,6 +68,32 @@ function dose(c, t, t0)
 end
 
 """
+   make_atn_model(u0, ui, v0, part, L)
+
+Returns an `ODEFunction` correpsonding to the ATN model with 
+fixed parameters `u0`, `ui`, `v0`, `part` and graph Laplacian `L`.
+"""
+function make_atn_model(u0, ui, v0, part, L)
+    function atn(D, x, p, t;)
+        u = @view x[1:72]
+        v = @view x[73:144]
+        a = @view x[145:216]
+
+        α_a, ρ_t, α_t, β, η = p
+
+        _ui = (ui .- u0) #.* (1 .- a)
+        _vi = ((part .+ (β .* (u .- u0))) .- v0) #.* ( 1 .- a )
+        _vi_max = (part .+ (β .* (ui .- u0)))
+        D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
+        D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
+        D[145:216] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
+        #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
+        return nothing
+    end
+    return ODEFunction(atn)
+end
+
+"""
    make_scaled_atn_model(u0, ui, v0, part, L)
 
 Returns an `ODEFunction` correpsonding to the scaled ATN model with 
@@ -94,45 +120,6 @@ function make_scaled_atn_model(ui, part, L)
     return ODEFunction(atn)
 end
 
-function make_scaled_atn_model_fixed(ui, part, L)
-    n = length(ui)
-    function atn(D, x, p, t;)
-        u = @view x[1:n]
-        v = @view x[n+1:2n]
-        a = @view x[2n+1:3n]
-
-        α_a, ρ_t, α_t, β, η = p
-         
-        Δ  = (part .+ (β .* ui)) 
-        δ = (part .+ (β .* u .* ui))
-        # vi = part .+ (β .* u) #.* ( 1 .- a )
-        D[1:n] .= α_a .* ui .* u .* (1 .- u)
-        D[n+1:2n] .= -ρ_t * L * v .+ α_t .* Δ .* v .* (1 .- v)
-        D[2n+1:3n] .= η .* v .* ( 1 .- a )
-
-        # return nothing
-    end
-    return ODEFunction(atn)
-end
-function make_scaled_atn_model_hemisphere(ui, part, L)
-    function atn(D, x, p, t;)
-        u = @view x[1:36]
-        v = @view x[37:72]
-        a = @view x[73:108]
-
-        α_a, ρ_t, α_t, β, η = p
-         
-        vi_max = (part .+ (β .* ui)) 
-        vi = (part .+ (β .* u .* ui))
-        # vi = part .+ (β .* u) #.* ( 1 .- a )
-        D[1:36] .= α_a .* ui .* u .* (1 .- u)
-        D[37:72] .= -ρ_t * L * v .+ α_t .* vi .* v .* ((vi./vi_max) .- v)
-        D[73:108] .= η .* v .* ( 1 .- a )
-        return nothing
-    end
-    return ODEFunction(atn)
-end
-
 """
    make_scaled_atn_pkpd_model(u0, ui, v0, part, L)
 
@@ -147,12 +134,13 @@ function heaviside(t)
    t > 0 ? 1 : 0
 end
 function make_scaled_atn_pkpd_model(ui, part, L, Ld, m, t0=0)
+    n = length(ui)
     function atn_pkpd(D, x, p, t)
-        u = @view x[1:36]
-        v = @view x[37:72]
-        a = @view x[73:108]
-        d = @view x[109:144]
-        q = @view x[145:end]
+        u = @view x[1:n]
+        v = @view x[n+1:2n]
+        a = @view x[2n+1:3n]
+        d = @view x[3n+1:4n]
+        q = @view x[4n+1:5n]
         
         α_a, ρ_t, α_t, β, η, ρ_d, α_d, α_c, λ_d = p
          
@@ -160,126 +148,13 @@ function make_scaled_atn_pkpd_model(ui, part, L, Ld, m, t0=0)
         δ = (part .+ (β .* q .* ui))
 
         f = α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
-        D[1:36] .= α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
-        D[37:72] .= -ρ_t * L * v .+ α_t .* Δ .* v .* ((δ./Δ) .- v)
-        D[73:108] .= η .* v .* ( 1 .- a )
-        D[109:144] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
-        D[145:end] .= heaviside.(f) .* (α_a .* ui .* q .* (1 .- q) .- α_d .* d .* q)
+        D[1:n] .= α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
+        D[n+1:2n] .= -ρ_t * L * v .+ α_t .* Δ .* v .* ((δ./Δ) .- v)
+        D[2n+1:3n] .= η .* v .* ( 1 .- a )
+        D[3n+1:4n] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
+        D[4n+1:5n] .= heaviside.(f) .* (α_a .* ui .* q .* (1 .- q) .- α_d .* d .* q)
     end
     return ODEFunction(atn_pkpd)
-end
-
-function make_scaled_atn_pkpd_model_tau(ui, part, L, Ld, m, t0=0)
-    function atn_pkpd(D, x, p, t)
-        u = @view x[1:36]
-        v = @view x[37:72]
-        a = @view x[73:108]
-        d = @view x[109:144]
-        q = @view x[145:end]
-        
-        α_a, ρ_t, α_t, β, η, ρ_d, α_d, α_c, λ_d = p
-         
-        Δ  = (part .+ (β .* ui)) 
-        δ = (part .+ (β .* q.* ui))
-        
-        f =  α_t .* Δ .* v .* ((δ./Δ) .- v)
-        # println(((δ./Δ) .- f)[29])
-        D[1:36] .= α_a .* ui .* u .* (1 .- u) .- α_d .* d .* u
-        D[37:72] .= -ρ_t * L * v .+ heaviside.((δ./Δ) .- f) .* f
-        D[73:108] .= η .* v .* ( 1 .- a )
-        D[109:144] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
-        D[145:end] .= heaviside.(f) .* (α_a .* ui .* q .* (1 .- q) .- α_d .* d .* q)
-    end
-    return ODEFunction(atn_pkpd)
-end
-
-"""
-   make_atn_model(u0, ui, v0, part, L)
-
-Returns an `ODEFunction` correpsonding to the ATN model with 
-fixed parameters `u0`, `ui`, `v0`, `part` and graph Laplacian `L`.
-"""
-function make_atn_model(u0, ui, v0, part, L)
-    function atn(D, x, p, t;)
-        u = @view x[1:72]
-        v = @view x[73:144]
-        a = @view x[145:216]
-
-        α_a, ρ_t, α_t, β, η = p
-
-        _ui = (ui .- u0) #.* (1 .- a)
-        _vi = ((part .+ (β .* (u .- u0))) .- v0) #.* ( 1 .- a )
-        _vi_max = (part .+ (β .* (ui .- u0)))
-        D[1:72] .= α_a .* (u .- u0) .* (_ui .- (u .- u0))
-        D[73:144] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
-        D[145:216] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
-        #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
-        return nothing
-    end
-    return ODEFunction(atn)
-end
-
-
-# """
-#    make_atn_model(u0, ui, v0, part, L)
-
-# Returns an `ODEFunction` correpsonding to the ATN model with 
-# fixed parameters `u0`, `ui`, `v0`, `part` and graph Laplacian `L`.
-# """
-# function make_atn_pkpd_model(u0, ui, v0, part, L,  Ld, m, t0=0)
-#     function atn(D, x, p, t;)
-#        u = @view x[1:36]
-#         v = @view x[37:72]
-#         a = @view x[73:108]
-#         d = @view x[109:144]
-        
-#         α_a, ρ_t, α_t, β, η, ρ_d, α_d, α_c, λ_d = p
-
-#         _ui = (ui .- u0) #.* (1 .- a)
-#         _vi = (part .+ (β .* (u .- u0))) #.* ( 1 .- a )
-#         p = _vi .- v
-#         vi = (heaviside.(-1 .* p) .* v) + (heaviside.(p) .* _vi) #.* ( 1 .- a )
-#         _vi_max = (part .+ (β .* (ui .- u0)))
-#         D[1:36] .= α_a .* (u .- u0) .* (_ui .- (u .- u0)) .- α_d .* d .* (u .- u0)
-#         D[37:72] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* ((vi .- v0) - (v .- v0))
-#         D[73:108] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
-#         D[109:144] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
-#         # D[145:end] .=  heaviside.(D[1:36]) .* (α_a .* (q .- u0) .* (_ui .- (q .- u0)))
-#         #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
-#         return nothing
-#     end
-#     return ODEFunction(atn)
-# end
-
-
-"""
-   make_atn_model(u0, ui, v0, part, L)
-
-Returns an `ODEFunction` correpsonding to the ATN model with 
-fixed parameters `u0`, `ui`, `v0`, `part` and graph Laplacian `L`.
-"""
-function make_atn_pkpd_model(u0, ui, v0, part, L,  Ld, m, t0=0)
-    function atn(D, x, p, t;)
-        u = @view x[1:36]
-        v = @view x[37:72]
-        a = @view x[73:108]
-        d = @view x[109:144]
-        q = @view x[145:end]
-        
-        α_a, ρ_t, α_t, β, η, ρ_d, α_d, α_c, λ_d = p
-
-        _ui = (ui .- u0) #.* (1 .- a)
-        _vi = ((part .+ (β .* (q .- u0))) .- v0) #.* ( 1 .- a )
-        _vi_max = (part .+ (β .* (ui .- u0)))
-        D[1:36] .= α_a .* (u .- u0) .* (_ui .- (u .- u0)) .- α_d .* d .* (u .- u0)
-        D[37:72] .= -ρ_t * L * (v .- v0) .+ α_t .* (v .- v0) .* (_vi - (v .- v0))
-        D[73:108] .= η .* conc.(v, v0, _vi_max) .* ( 1 .- a )
-        D[109:144] .= -ρ_d * Ld * d .+ dose(α_c, t, t0) .* m .- λ_d .* d 
-        D[145:end] .=  heaviside.(D[1:36]) .* (α_a .* (q .- u0) .* (_ui .- (q .- u0)))
-        #D[145:216] .= η .* (v .- v0) .* ( 1 .- a )
-        return nothing
-    end
-    return ODEFunction(atn)
 end
 
 """
@@ -327,70 +202,10 @@ function generate_data(prob::ODEProblem, t, noise)
     return ab, tau, atr
 end
 
-"""
-    simulate_amyloid(u::Vector{Float64}, u0::Vector{Float64}, ui::Vector{Float64}, a, t::Float64)
-
-Simulate regional amyloid progression using a logistic model with 
-initial conditions `u` that evolves between `u0` and `ui` with rate `a`
-and evaluated at time, `t`.
-"""
-function simulate_amyloid(u::AbstractVector, u0::Vector{Float64}, ui::Vector{Float64}, a, t::Number)
-    x = u .- u0
-    ((x .* ui .* exp.(ui .* a .* t)) ./ (ui .- x .+ x .* exp.(ui .* a .* t))) .+ u0
-end
-
-"""
-    simulate_amyloid(u::Vector{Float64}, u0::Vector{Float64}, ui::Vector{Float64}, a, ts::Vector{Float64})
-
-Simulate regional amyloid progression using a logistic model with 
-initial conditions `u` that evolves between `u0` and `ui` with rate `a`
-and evaluated at times, `ts`.
-"""
-function simulate_amyloid(u::Vector{Float64}, u0::Vector{Float64}, ui::Vector{Float64}, a, ts::Vector{Float64})
-    reduce(hcat, [simulate_amyloid(u, u0, ui, a, t) for t in ts])
-end
-
-"""
-    simulate_amyloid(us::Vector{Vector{Float64}}, u0::Vector{Float64}, ui::Vector{Float64}, 
-                      as, ts::Vector{Vector{Float64}})
-
-Simulate multiple trjacetories of regional amyloid progression 
-using a logistic model with initial conditions `us` that evolves 
-between `u0` and `ui` with rates `as` and evaluated at times, `ts`.
-
-`us`, `as` and `ts` should have the same length, each corresponding to 
-an individual trajectory.
-"""
-function simulate_amyloid(us::Vector{Vector{Float64}}, u0::Vector{Float64}, ui::Vector{Float64}, 
-                          as, ts::Vector{Vector{Float64}})
-        [simulate_amyloid(u, u0, ui, a, t) for (u, a, t) in zip(us, as, ts)]
-end
-
 function _make_atn_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times)
     function prob_func(prob,i,repeat)
         remake(prob, u0=initial_conditions[i], 
                      p=[α_a[i], ρ_t[i], α_t[i], β, η[i]], saveat=_times[i])
-    end
-end
-
-function _make_atn_individial_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, _times)
-    function prob_func(prob,i,repeat)
-        remake(prob, u0=initial_conditions[i], 
-                     p=[α_a[i], ρ_t[i], α_t[i], β[i], η[i]], saveat=_times[i])
-    end
-end
-
-function _make_atn_fixed_prob_func(initial_conditions, α_a, ρ_t, α_t, κ, β, η, _times)
-    function prob_func(prob,i,repeat)
-        remake(prob, u0=initial_conditions[i], 
-                     p=[α_a[i], ρ_t[i], α_t[i], κ, β, η[i]], saveat=_times[i])
-    end
-end
-
-function _make_atn_feedback_prob_func(initial_conditions, α_a, ρ_t, α_t, β, η, δ, _times)
-    function prob_func(prob,i,repeat)
-        remake(prob, u0=initial_conditions[i], 
-                     p=[α_a[i], ρ_t[i], α_t[i], β, η[i], δ], saveat=_times[i])
     end
 end
 
@@ -410,15 +225,6 @@ function split_sols_ensemble(esol, ab_idx, tau_idx)
     tau = reduce(vcat, [_d[2] for _d in d])
     vol = reduce(vcat, [_d[3] for _d in d])     
     return ab, tau, vol
-end
-
-"""
-    split_sols_serial(esol, ab_idx, tau_idx)
-
-Separate a single `ODESolution` for each ATN biomarker. 
-"""
-function split_sols_serial(s, a_idx, t_idx)
-    vec(s[1:72, a_idx]), vec(s[73:144, t_idx]), vec(s[145:216, t_idx])
 end
 
 """
@@ -459,6 +265,7 @@ function get_sub_params_fixed_beta(pst, n, k, beta)
             mean([pst["η[$i]"][k] for i in n])]
     return [_p[1], _p[2], _p[3], beta, _p[4]]
 end
+
 """
     calculate_colocalisation_order(parc::Parcellation, pst, model, inits, tau_threshold, ab_threshold)
 
