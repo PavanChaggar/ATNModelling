@@ -32,6 +32,6 @@ DKTID,Seed,Hemisphere,Seed_prob,lobe
 75,insula,left,0.0,cingulate
 81,Left-Hippocampus,left,0.0,temporal
 82,Left-Amygdala,left,0.0,temporal
-71,middletemporal,left,0.19348659003831417,temporal
-72,bankssts,left,0.30268199233716475,temporal
-70,inferiortemporal,left,0.5038314176245211,temporal
+71,middletemporal,left,0.016093092349591484,temporal
+72,bankssts,left,0.09606338202525377,temporal
+70,inferiortemporal,left,0.8878435256251548,temporal
