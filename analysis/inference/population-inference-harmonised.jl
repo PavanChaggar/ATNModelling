@@ -1,22 +1,19 @@
 using ATNModelling.SimulationUtils: make_prob, make_atn_model, 
-                                    simulate, resimulate, simulate_amyloid,
-                                    load_ab_params, load_tau_params, conc
+                                    load_ab_params, load_tau_params
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names
-using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise, make_ucsf_df,rename_ucsf_df, add_icv, make_ucsf_name, make_dkt_name
-using ATNModelling.InferenceModels: fit_model, ensemble_atn_harmonised, ensemble_atn_harmonised_individual
+using ATNModelling.DataUtils: align_data, normalise!, get_time_idx, vectorise, 
+                              make_ucsf_df, add_icv
+using ATNModelling.InferenceModels: ensemble_atn_harmonised
 
 using Connectomes: laplacian_matrix, get_label
-using ADNIDatasets: ADNIDataset, get_id, get_dates, get_initial_conditions, calc_suvr, get_vol, get_times
+using ADNIDatasets: ADNIDataset, get_id, calc_suvr, get_vol, get_times
 using DrWatson: projectdir, datadir
 using CSV, DataFrames
-using SciMLBase: successful_retcode
 using DifferentialEquations, Turing, LinearAlgebra
-using ADTypes: AutoZygote
 using Random
 using AdvancedHMC
 using SciMLSensitivity
 using Serialization
-using LsqFit
 # --------------------------------------------------------------------------------
 # Script params 
 # --------------------------------------------------------------------------------
@@ -148,7 +145,7 @@ fbb_idx = 1:18
 fbp_idx = 19:34
 n = 34
 
-for i in 1:n_chains
+for i in 1:4
     Random.seed!(1234 * i)
 
     m = ensemble_atn_harmonised(fbb_prob, fbb_inits, fbb_ts, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,

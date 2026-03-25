@@ -42,15 +42,15 @@ This model assumes i.i.d noise for pooled across Aβ tracers and a pooled coupli
     η    ~ filldist(truncated(Normal(Em, Es), lower=0), n)
 
     fbb_ensemble_prob = EnsembleProblem(fbb_prob, 
-                                        prob_func=make_atn_prob_func(fbb_inits, α_a[fbb_idx], ρ_t[fbb_idx], α_t[fbb_idx], β_fbb, η[fbb_idx], fbb_times), 
-                                        output_func=atn_output_func)
+                                        prob_func=_make_atn_prob_func(fbb_inits, α_a[fbb_idx], ρ_t[fbb_idx], α_t[fbb_idx], β_fbb, η[fbb_idx], fbb_times), 
+                                        output_func=_atn_output_func)
 
     fbb_esol = solve(fbb_ensemble_prob, Tsit5(), verbose=false, abstol = 1e-6, reltol = 1e-6, trajectories=fbb_n)
 
 
     fbp_ensemble_prob = EnsembleProblem(fbp_prob, 
-                                        prob_func=make_atn_prob_func(fbp_inits, α_a[fbp_idx], ρ_t[fbp_idx], α_t[fbp_idx], β_fbp, η[fbp_idx], fbp_times), 
-                                        output_func=atn_output_func)
+                                        prob_func=_make_atn_prob_func(fbp_inits, α_a[fbp_idx], ρ_t[fbp_idx], α_t[fbp_idx], β_fbp, η[fbp_idx], fbp_times), 
+                                        output_func=_atn_output_func)
 
     fbp_esol = solve(fbp_ensemble_prob, Tsit5(), verbose=false, abstol = 1e-6, reltol = 1e-6, trajectories=fbp_n)
 
