@@ -146,28 +146,3 @@ for gmm in gmms
     push!(threshold, xs[idx])
 end
 writedlm(projectdir("output/analysis-derivatives/bf/tau-derivatives/tau-cutoffs-halfprob-bf.csv"), threshold)
-
-
-fg(x, μ, σ) = exp.(.-(x .- μ) .^ 2 ./ (2σ^2)) ./ (σ * √(2π))
-
-function plot_density!(μ, Σ, weight; color=:blue, label="")
-    d = Normal(μ, Σ)
-    x = LinRange(quantile(d, .00001),quantile(d, .99999), 200)
-    lines!(x, weight .* fg(x, μ, Σ); color = color, label=label)
-    band!(x, fill(0, length(x)), weight .* fg(x, μ, Σ); color = (color, 0.1), label=label)
-end
-
-
-begin
-    f = Figure()
-    ax = Axis(f[1,1])
-    node = 4
-    hist!(reduce(hcat, ics)[node,:], normalization=:pdf, bins=20)
-    # plot!( Normal.(ms, stds)[node])
-    # plot!( Normal.(ms2, stds2)[node])
-    plot_density!(ms[node], stds[node], ws[node])
-    plot_density!(ms2[node], stds2[node], ws2[node])
-    vlines!(cutoffs[node])
-    vlines!(threshold[node])
-    f
-end
