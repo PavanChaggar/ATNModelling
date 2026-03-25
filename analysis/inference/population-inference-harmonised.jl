@@ -145,7 +145,7 @@ fbb_idx = 1:18
 fbp_idx = 19:34
 n = 34
 
-for i in 1:4
+for i in 1:n_chains
     Random.seed!(1234 * i)
 
     m = ensemble_atn_harmonised(fbb_prob, fbb_inits, fbb_ts, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
