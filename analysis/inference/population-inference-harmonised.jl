@@ -13,6 +13,7 @@ using SciMLBase: successful_retcode
 using DifferentialEquations, Turing, LinearAlgebra
 using ADTypes: AutoZygote
 using Random
+using AdvancedHMC
 using SciMLSensitivity
 using Serialization
 using LsqFit
@@ -143,42 +144,25 @@ fbp_vec_data = vectorise(fbp_suvr)
 fbp_tau_vec_data = vectorise(fbp_tau_suvr)
 fbp_vol_vec_data = vectorise(fbp_vols)
 
-# @assert allequal(0 .<= fbb_vec_data .<= 1)
-# @assert allequal(0 .<= fbb_tau_vec_data .<= 1)
-# @assert allequal(0 .<= fbb_vol_vec_data .<= 1)
-
-# @assert allequal(0 .<= fbp_vec_data .<= 1)
-# @assert allequal(0 .<= fbp_tau_vec_data .<= 1)
-# @assert allequal(0 .<= fbp_vol_vec_data .<= 1)
-
 fbb_idx = 1:18
 fbp_idx = 19:34
 n = 34
 
-linearmodel(x, p) = part .+ p[1] .* x
-fbb_fitted_model = curve_fit(linearmodel, fbb_ui .- fbb_u0, vi, [1.0])
-println("params = $(fitted_model.param)")
-fbp_fitted_model = curve_fit(linearmodel, fbp_ui .- fbp_u0, vi, [1.0])
-println("params = $(fitted_model.param)")
+for i in 1:n_chains
+    Random.seed!(1234 * i)
 
-β = [fbb_fitted_model.param[1] .* ones(18); fbp_fitted_model.param[1] .* ones(16)]
+    m = ensemble_atn_harmonised(fbb_prob, fbb_inits, fbb_ts, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
+                                fbp_prob, fbp_inits, fbp_ts, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
 
-Random.seed!(1234)
+    pst = m | (fbb_data = fbb_vec_data, fbb_tau_data = fbb_tau_vec_data, fbb_vol_data = fbb_vol_vec_data,
+            fbp_data = fbp_vec_data, fbp_tau_data = fbp_tau_vec_data, fbp_vol_data = fbp_vol_vec_data);
+    pst()
+    println("Starting Inference")
 
-m = ensemble_atn_harmonised_individual(fbb_prob, fbb_inits, fbb_ts, fbb_ab_tidx, fbb_tau_tidx, fbb_idx, fbb_n,
-                                       fbp_prob, fbp_inits, fbp_ts, fbp_ab_tidx, fbp_tau_tidx, fbp_idx, fbp_n, n)
+    samples = sample(pst, Turing.NUTS(0.8, metricT=AdvancedHMC.DenseEuclideanMetric), MCMCSerial(), n_samples, 1)
+    println("Number of Divergences: $(sum(samples[:numerical_error]))")
 
-pst = m | (fbb_data = fbb_vec_data, fbb_tau_data = fbb_tau_vec_data, fbb_vol_data = fbb_vol_vec_data,
-          fbp_data = fbp_vec_data, fbp_tau_data = fbp_tau_vec_data, fbp_vol_data = fbp_vol_vec_data,
-          β = β);
-pst()
+    display(summarize(samples))
 
-Random.seed!(1234)
-
-println("Starting Inference")
-samples = sample(pst, Turing.NUTS(0.8), MCMCSerial(), n_samples, n_chains)
-println("Number of Divergences: $(sum(samples[:numerical_error]))")
-
-display(summarize(samples))
-
-serialize(projectdir("output/chains/population-scaled-atn/pst-samples-harmonised-suvr-diag-$(n_chains)x$(n_samples).jls"), samples)
+    serialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-$(n_chains)x$(n_samples)-$i.jls"), samples)
+end
