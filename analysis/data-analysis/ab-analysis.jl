@@ -11,7 +11,7 @@ using Polynomials: coeffs
 data_path = datadir("ADNI/2025/UCBERKELEY_AMY_6MM_28Jul2025.csv");
 data_df = CSV.read(data_path, DataFrame)
 
-tracer = "FBB"
+tracer = "FBP"
 fbb_data = filter(x -> x.TRACER == tracer, data_df)
 dropmissing!(fbb_data, :AMYLOID_STATUS_COMPOSITE_REF)
 
@@ -21,7 +21,8 @@ dktnames = get_parcellation() |> get_cortex |> get_dkt_names
 push!(dktnames, "SUMMARY")
 
 data = ADNIDataset(abpos_df, dktnames; min_scans=2, reference_region="COMPOSITE_REF", qc=false)
-
+# N = 205 FBB
+# N = 763 FBP
 ab_vf = baseline_difference(data, 73)
 
 CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-vector-field.csv"), ab_vf)
@@ -41,15 +42,10 @@ writedlm(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-polyn
 #-----------------------------------------------------------------------
 # Ab integration
 #-----------------------------------------------------------------------
-# xt(t) = (32.298 + 1.152 * exp(0.122 * t))/(51.483 + exp(0.122 * t))
-# xt(t, p) = (32.298 + 1.152 * exp(0.122 * t))/(51.483 + exp(0.122 * t)) - p
-# xt(t) = (558.976 + 1.22711 * exp(0.1665152871392 * t))/(833.877 + exp(0.1665152871392 * t))
-# xt(t, p) = (558.976 + 1.22711 * exp(0.1665152871392 * t))/(833.877 + exp(0.1665152871392 * t)) - p
-
-xt(t) = (201.542 + 1.2046 * exp(0.1632817611432 * t))/(302.059 + exp(0.1632817611432 * t)) # FBB 2025
+xt(t) = (201.542 + 1.2046 * exp(0.1632817611432 * t))/(302.059 + exp(0.1632817611432 * t)) # FBB 2025 x(0) = 0.669
 xt(t, p) = (201.542 + 1.2046 * exp(0.1632817611432 * t))/(302.059 + exp(0.1632817611432 * t)) - p # FBB 2025
 
-# xt(t) = (259.359 + 1.1397 * exp(0.137327756518 * t))/(399.152 + exp(0.137327756518 * t)) # FBP 2025
+# xt(t) = (259.359 + 1.1397 * exp(0.137327756518 * t))/(399.152 + exp(0.137327756518 * t)) # FBP 2025 x(0) = 0.651
 # xt(t, p) = (259.359 + 1.1397 * exp(0.137327756518 * t))/(399.152 + exp(0.137327756518 * t)) - p # FBP 2025
 
 t_df = find_amyloid_time(xt, data)

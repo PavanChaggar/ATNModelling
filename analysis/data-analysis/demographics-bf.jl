@@ -10,77 +10,36 @@ data_path = datadir("bf-data/bf-data-ab-tau-summary.csv");
 
 data_df = CSV.read(data_path, DataFrame)
 
-dktnames = get_parcellation() |> get_cortex |> get_dkt_names
-data = BFDataset(data_df, dktnames; min_scans=2, tracer=:ab)
-sid = "BF" .* string.(get_id.(data))
-
-_idx = [findfirst(x -> x == _sid, data_df.sid) for _sid in sid]
-abpos = data_df[_idx,:]
-abpos.age |> mean
-count(==(0), abpos.gender_baseline_variable) / 812
-filter(!ismissing, abpos.education_level_years_baseline_variable) |> mean
-[count(==(x), abpos.diagnosis_baseline_variable) for x in ["AD", "SCD", "MCI", "Normal"]] / 812
-
-st = ["NormalNot_determined", 
-"SCDNot_determined",
-"MCINot_determined",
-"NormalAD",
-"SCDAD",
-"MCIAD",
-]
-
-st = ["Normal", "SCD", "MCI", "Dementia"]
-unique(abpos.diagnosis_baseline_variable)
-status = abpos.diagnosis_baseline_variable .* abpos.underlying_etiology_text_baseline_variable
-st_count = [count(==(x), status) for x in st] / 813
-sum(st_count)
-sum(st_count)
-
-abneg_tau = filter(x -> x.ab_status == 0, data_df)
-data = BFDataset(abneg_tau, dktnames; min_scans=1, tracer=:tau)
-sid = "BF" .* string.(get_id.(data))
-_idx = [findfirst(x -> x == _sid, data_df.sid) for _sid in sid]
-abpos = data_df[_idx,:]
-abpos.age |> mean
-count(==(0), abpos.gender_baseline_variable) / 938
-filter(!ismissing, abpos.education_level_years_baseline_variable) |> mean
-dropmissing!(abpos, ["diagnosis_baseline_variable","underlying_etiology_text_baseline_variable"])
-status = abpos.diagnosis_baseline_variable .* abpos.underlying_etiology_text_baseline_variable
-st_count = [count(==(x), status) for x in st] / 877
-
-
-ab_data_df = filter(x -> x.ab_status == 1, data_df)
-ab_data = BFDataset(ab_data_df, dktnames; min_scans=3, tracer=:ab)
-
-# Tau data 
-tau_pos_df = filter(x ->  x.MTL_Status == 1 || x.NEO_Status == 1, ab_data_df);
-tau_data = BFDataset(tau_pos_df, dktnames; min_scans=3, tracer=:tau)
-
-ab, tau = align_data(ab_data, tau_data)
-
-sid = "BF" .* string.(get_id.(tau))
-_idx = [findfirst(x -> x == _sid, data_df.sid) for _sid in sid]
-abpos = data_df[_idx,:]
-abpos.age |> mean
-count(==(0), abpos.gender_baseline_variable) / 38
-filter(!ismissing, abpos.education_level_years_baseline_variable) |> mean
-[count(==(x), abpos.underlying_etiology_text_baseline_variable) for x in ["AD", "SCD", "MCI", "Normal"]] / 48
-dropmissing!(abpos, ["diagnosis_baseline_variable","underlying_etiology_text_baseline_variable"])
-status = abpos.diagnosis_baseline_variable .* abpos.underlying_etiology_text_baseline_variable
-st_count = [count(==(x), status) for x in st] / 48
-sum(st_count[2:3])
-st = ["NormalNot_determined", 
-"SCDNot_determined",
-"MCINot_determined",
-"NormalAD",
-"SCDAD",
-"MCIAD",
-]
-
+df = DataFrame(Group=String[], Age=Float64[], Gender=Float64[], Education=Float64[], CN = Float64[], MCI = Float64[], AD = Float64[], CL= Float64[], CL_std=Float64[])
+Group = "inference"
 st = ["Normal", "SCD", "MCI", "AD"]
-unique(abpos.diagnosis_baseline_variable)
-status = abpos.cognitive_status_baseline_variable .* abpos.underlying_etiology_text_baseline_variable
-status = abpos.cognitive_status_baseline_variable
-st_count = [count(==(x), status) for x in st] / 48
-abpos.CL_fnc_ber_com_composite |> mean
-abpos.CL_fnc_ber_com_composite |> std
+for Group in ["inference-subs", "coloc-subs"]
+    id_df = CSV.read(projectdir("data/bf-data/" * Group * ".csv"), DataFrame)
+
+    sid = "BF" .* string.(id_df.sub_id)
+    n =length(sid)
+    println(n)
+    _idx = [findfirst(x -> x == _sid, data_df.sid) for _sid in sid]
+    abpos = data_df[_idx,:]
+    age = abpos.age |> mean
+    Gender = count(==(0), abpos.gender_baseline_variable) / n
+
+    Education = filter(!ismissing, abpos.education_level_years_baseline_variable) |> mean
+    dropmissing!(abpos, :diagnosis_baseline_variable)
+    status = abpos.diagnosis_baseline_variable
+    println(unique(status))
+    st_count = [count(==(x), status) for x in st] / n
+    pos_centiloids = abpos.CL_fnc_ber_com_composite |> mean
+    pos_centiloids_st = abpos.CL_fnc_ber_com_composite |> std
+
+    push!(df, (Group, age, Gender, Education, 
+                    st_count[1], sum(st_count[2:3]), st_count[4], pos_centiloids, pos_centiloids_st))
+end
+df
+
+
+using PrettyTables  
+
+formatter = (v, i, j) -> round(v, digits = 2);
+
+pretty_table(df; formatters = ft_printf("%5.3f"), backend=Val(:latex))

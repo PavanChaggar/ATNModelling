@@ -17,6 +17,8 @@ cortex = get_parcellation() |> get_cortex
 dktnames = get_dkt_names(cortex)
 
 neg_tau_data = ADNIDataset(abneg_tau, dktnames; min_scans=1)
+# N = 582
+
 neg_subdata = get_initial_conditions.(neg_tau_data)
 
 for i in 1:72
