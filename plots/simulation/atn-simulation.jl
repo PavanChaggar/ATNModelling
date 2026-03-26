@@ -2,6 +2,7 @@ using ATNModelling.SimulationUtils: load_ab_params, load_tau_params,
                                     make_atn_model, make_prob, simulate, resimulate,
                                     generate_data
 using ATNModelling.ConnectomeUtils: get_connectome, get_parcellation, get_cortex, get_dkt_names, get_distance_laplacian, get_braak_regions
+using Connectomes: get_hemisphere, plot_roi!, get_node_id, get_lobe, laplacian_matrix, get_label, plot_roi
 using ATNModelling.InferenceModels: atn_inference, fit_model
 using ATNModelling.DataUtils: baseline_difference, sigmoid
 using Connectomes: laplacian_matrix, get_label, get_hemisphere, get_node_id,
@@ -20,6 +21,10 @@ u0, ui = load_ab_params(tracer="FBB")
 v0, vi, part = load_tau_params()
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2)
 L = laplacian_matrix(c)
+subcortex = filter(x -> get_lobe(x) == "subcortex", get_parcellation())[collect(1:10)]
+left_subcortex = filter(x -> get_hemisphere(x) == "left", subcortex)
+right_subcortex = filter(x -> get_hemisphere(x) == "right", subcortex)
+
 
 α_a, ρ_t, α_t, β, η = 0.75, 0.02, 0.5, 3.21, 0.05
 params = [α_a, ρ_t, α_t, β, η]
@@ -146,6 +151,8 @@ begin
     GLMakie.activate!()
     f = Figure(size=(1350, 1000))
     cols = Makie.wong_colors()
+    scmap = ColorSchemes.Greys
+
     d = rand(100)
     G  = f[1,1] = GridLayout()
     G1 = G[1:3,1]= GridLayout()
@@ -163,10 +170,13 @@ begin
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, d[1:36], cmap)
+    plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
+
     ax = Axis3(g1[1,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, d[1:36], cmap)
+    plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
 
     Colorbar(g1[2, 1:2], limits = (minimum(ui), maximum(ui)), colormap = cmap,
     vertical = false, label = "Aβ SUVR", labelsize=25, flipaxis=false,
@@ -177,10 +187,13 @@ begin
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, d[1:36], cmap)
+    plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
+
     ax = Axis3(g1[3,2], aspect = :data, azimuth = 1.0pi, elevation=0.0pi,  protrusions=(1.0,1.0,1.0,1.0))
     hidedecorations!(ax)
     hidespines!(ax)
     plot_roi!(nodes, d[1:36], cmap)
+    plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
 
     Colorbar(g1[4, 1:2], limits = (minimum(vi), maximum(vi)), colormap = cmap,
     vertical = false, label = "Tau SUVR", labelsize=25, flipaxis=false,
@@ -253,28 +266,36 @@ begin
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, absol, abcmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
         ax = Axis3(g4[2,i+1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, absol, abcmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
         
         ax = Axis3(g4[3,i+1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, tausol, taucmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
+
         ax = Axis3(g4[4,i+1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, tausol, taucmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
 
         ax = Axis3(g4[5,i+1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, atrsol, atrcmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
+
         ax = Axis3(g4[6,i+1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, atrsol, atrcmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
     end
      cb = Colorbar(g4[1:2, 6], limits = (minimum(u0), 1.4), colormap = abcmap,
             vertical = true, labelsize=20, flipaxis=true, ticks=collect(0.6:0.2:1.4),
@@ -364,6 +385,8 @@ begin
     sol_ts = simulate(func, inits, tspan, params; saveat=ts)
     
     f = Figure(size=(1000,800))
+        scmap = ColorSchemes.Greys
+
     g4 = f[1,1] = GridLayout()
 
 
@@ -384,28 +407,35 @@ begin
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, absol, abcmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
+
         ax = Axis3(g4[2,i+1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, absol, abcmap)
-        
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
+
         ax = Axis3(g4[3,i+1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, tausol, taucmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
         ax = Axis3(g4[4,i+1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, tausol, taucmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
 
         ax = Axis3(g4[5,i+1], aspect = :data, azimuth = 1.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, atrsol, atrcmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
         ax = Axis3(g4[6,i+1], aspect = :data, azimuth = 0.0pi, elevation=0.0pi, protrusions=(1.0,1.0,1.0,1.0))
         hidedecorations!(ax)
         hidespines!(ax)
         plot_roi!(nodes, atrsol, atrcmap)
+        plot_roi!(get_node_id.(right_subcortex), fill(0.5, 5), scmap)
     end
      cb = Colorbar(g4[1:2, 6], limits = (minimum(u0), 1.4), colormap = abcmap,
             vertical = true, labelsize=20, flipaxis=true, ticks=collect(0.6:0.2:1.4),
