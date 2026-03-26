@@ -7,27 +7,27 @@ using Connectomes: laplacian_matrix, get_label
 using FileIO
 using DrWatson: projectdir
 using Serialization
-    # --------------------------------------------------------------------------------
-    # Simulation set-up
-    # --------------------------------------------------------------------------------
+# --------------------------------------------------------------------------------
+# Simulation set-up
+# --------------------------------------------------------------------------------
 u0, ui = load_ab_params()
 v0, vi, part = load_tau_params()
 c = get_connectome(;include_subcortex=false, apply_filter=true, filter_cutoff=1e-2)
 L = laplacian_matrix(c)
 
 
-α_a, ρ_t, α_t, β, η = 0.75, 0.015, 0.5, 3.75, 0.1
+α_a, ρ_t, α_t, β, η = 0.75, 0.02, 0.5, 3.21, 0.05
 params = [α_a, ρ_t, α_t, β, η]
 
 ab_inits = copy(u0)
 tau_inits = copy(v0)
 atr_inits = zeros(72)
 
-ab_inits .+= 0.2 .* (ui .- u0)
+ab_inits .+= 0.25 .* (ui .- u0)
 
 tau_seed_regions = ["entorhinal" ]#,"Left-Amygdala", "Right-Amygdala", "Left-Hippocampus", "Right-Hippocampus"]
 tau_seed_idx = findall(x -> get_label(x) ∈ tau_seed_regions, c.parc)
-tau_inits[tau_seed_idx] .+= 0.2 .* ((part[tau_seed_idx] .+ β .* (ui[tau_seed_idx] - u0[tau_seed_idx])) .- v0[tau_seed_idx])
+tau_inits[tau_seed_idx] .+= 0.25 .* ((part[tau_seed_idx] .+ β .* (ui[tau_seed_idx] - u0[tau_seed_idx])) .- v0[tau_seed_idx])
 
 inits = [ab_inits; tau_inits; atr_inits]
 
