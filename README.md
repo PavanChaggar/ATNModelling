@@ -122,3 +122,15 @@ plot(sol, idxs=1:72) # plots AB
 plot(sol, idxs=73:144) # plots tau 
 plot(sol, idxs=145:end) # plots neurodegeneration 
 ```
+
+## Reference 
+```
+@article{chaggar2026dynamical,
+  title={Dynamical A $\beta$-Tau-Neurodegeneration Model Predicts Alzheimer’s Disease Mechanisms and Biomarker Progression},
+  author={Chaggar, Pavanjit and Vogel, Jacob W and Thompson, Travis B and Aldea, Roxana and Strandberg, Olof and Stomrud, Erik and Palqmvist, Sebastian and Ossenkoppele, Rik and Jbabdi, Saad and Magon, Stefano and others},
+  journal={bioRxiv},
+  pages={2026--01},
+  year={2026},
+  publisher={Cold Spring Harbor Laboratory}
+}
+```
