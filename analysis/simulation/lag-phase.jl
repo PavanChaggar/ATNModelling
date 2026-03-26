@@ -46,18 +46,19 @@ tracer="FBB"
 fbb_u0, fbb_ui = load_ab_params(tracer=tracer)
 fbb_data_df = filter(x -> x.qc_flag==2 && x.TRACER == tracer 
                 && x.AMYLOID_STATUS_COMPOSITE_REF == 1 && x.RID 
-                ∈ tau_subs && x.CENTILOIDS < 65, _ab_data_df);
-                # ∈ tau_subs && x.CENTILOIDS < 60, _ab_data_df);
-mean(fbb_data_df.CENTILOIDS)
+                ∈ tau_subs && x.CENTILOIDS < 70, _ab_data_df);
+
+amy_pos_init_idx = [findfirst(isequal(id), _ab_data_df.RID) for id in unique(fbb_data_df.RID)]
+pos_centiloids = mean(_ab_data_df[amy_pos_init_idx, :].CENTILOIDS)
+pos_centiloids_st = std(_ab_data_df[amy_pos_init_idx, :].CENTILOIDS)
+
 fbb_data = ADNIDataset(fbb_data_df, dktnames; min_scans=1, reference_region="COMPOSITE_REF")
 
 tau_data = filter(x -> get_id(x) ∈ get_id.(fbb_data), _tau_data)
 
-pst = deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-1x1000.jls"));
 pst = chainscat([deserialize(projectdir("output/chains/population-atn/pst-samples-harmonised-suvr-random-beta-lognormal-4x1000-$i.jls")) for i in 1:4]...)
 
 meanpst = mean(pst)
-
 # --------------------------------------------------------------------------------
 # Amyloid data
 # --------------------------------------------------------------------------------
@@ -80,20 +81,11 @@ tau_conc = map(x -> conc.(x, v0, vi), tau_suvr)
 tau_inits = [d[:,1] for d in tau_conc]
 
 _mean_tau_init = mean(tau_inits)
-# tau_cutoffs = fill(0.05, 72)
 idx = _mean_tau_init .< conc.(tau_cutoffs, v0, vi)
-# idx = _mean_tau_init .< 0.025
 _mean_tau_init[idx] .= 0
 _mean_tau_init_sym = mean.(zip(_mean_tau_init[1:36], _mean_tau_init[37:end]))
 mean_tau_init = [_mean_tau_init_sym; _mean_tau_init_sym]
 scatter(mean_tau_init)
-
-
-# amyloid_production = 0.37
-# tau_transport = 0.07
-# tau_production = 0.13
-# coupling = 4.836840700255846
-# atrophy = 0.15
 
 amyloid_production = mean([meanpst["α_a[$i]", :mean] for i in 1:18])
 tau_transport = mean([meanpst["ρ_t[$i]", :mean] for i in 1:18])
@@ -108,15 +100,10 @@ atn_model = make_scaled_atn_model((fbb_ui .- fbb_u0), (part .- v0), L)
 
 prob = ODEProblem(atn_model, [mean_ab_init; mean_tau_init; zeros(72)], (0, 80), p)
 sol = solve(prob, Tsit5(), reltol=1e-12, abstol=1e-12)
-plot(sol, idxs=73:144)
 d1 = reduce(hcat, [sol(t, Val{1}) for t in 0:0.1:80])
 d2 = reduce(hcat, [sol(t, Val{2}) for t in 0:0.1:80])
 d3 = reduce(hcat, [sol(t, Val{3}) for t in 0:0.1:80])
 d4 = reduce(hcat, [sol(t, Val{4}) for t in 0:0.1:80])
-
-function logistic_solution(t, a, x0)
-    return (x0 * exp(a * t))/(1 + x0 * (-1 + exp(a *t)))
-end
 
 ab_threshold = Vector{Float64}()
 tau_threshold = Vector{Float64}()
@@ -142,39 +129,3 @@ scatter(ab_threshold)
 scatter(tau_threshold)
 writedlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/ab-thresholds.csv"), ab_threshold)
 writedlm(projectdir("output/analysis-derivatives/colocalisation/thresholds/tau-thresholds.csv"), tau_threshold)
-
-begin
-    f = Figure(size=(1000, 600))
-    node = 36
-    ax = Axis(f[1,1])
-    ylims!(ax, 0, 1)
-    plot!(sol, idxs=72+node)
-    hlines!(tau_threshold[node])
-    hlines!(tau_acceleration[node])
-    vlines!(tau_threshold_t[node])
-    ax = Axis(f[2,1])
-    # ylims!(ax, -0.015, 0.015)
-    lines!(0:0.1:80, d2[72+node, :])
-    lines!(0:0.1:80, d3[72+node, :])
-    # lines!(0:0.1:80, d4[72+node, :])
-    vlines!(tau_threshold_t[node])
-    f
-end
-
-begin
-    f = Figure(size=(1000, 600))
-    node = 3
-    ax = Axis(f[1,1])
-    ylims!(ax, 0, 1)
-    plot!(sol, idxs=node)
-    hlines!(ab_threshold[node])
-    # hlines!(ab_acceleration[node])
-    # vlines!(ab_threshold_t[node])
-    ax = Axis(f[2,1])
-    # ylims!(ax, -0.015, 0.015)
-    lines!(0:0.1:80, d2[node, :])
-    lines!(0:0.1:80, d3[node, :])
-    # lines!(0:0.1:80, d4[72+node, :])
-    # vlines!(ab_threshold_t[node])
-    f
-end
