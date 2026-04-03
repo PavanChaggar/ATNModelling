@@ -123,6 +123,13 @@ plot(sol, idxs=73:144) # plots tau
 plot(sol, idxs=145:end) # plots neurodegeneration 
 ```
 
+## Usage to estimate fixed model parameters
+The dATN model has fixed parameters $A_0$, $A_\infty$, $T_0$ and $\kappa$. $T_0$ was estimated previously from a multitau cohort in Chaggar et al., PLoS Biology 2025, and are provided in `data/adni-derivatives/tau-params.csv`. 
+
+The code for deriving $A_0$ and $A_\infty$ can be found in `analysis/data-analysis/ab-analysis.jl`. 
+
+The code for deriving $\kappa$ can be found in `analysis/data-analysis/tau-analysis.jl`. This file contains code to output cross-seciontl ROI data that can be processed with the python script `py-analysis/gaussian-mixture.py` and then compile the results to derive $\kappa$. 
+
 ## Reference 
 ```
 @article{chaggar2026dynamical,

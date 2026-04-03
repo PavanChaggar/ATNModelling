@@ -21,6 +21,7 @@ neg_tau_data = ADNIDataset(abneg_tau, dktnames; min_scans=1)
 
 neg_subdata = get_initial_conditions.(neg_tau_data)
 
+# output ROI data for analysis in python 
 for i in 1:72
     x_data = [n[i] for n in neg_subdata]
     writedlm(projectdir("py-analysis/roi-data/data-$i.csv"), x_data)
@@ -28,6 +29,7 @@ end
 
 writedlm(projectdir("py-analysis/temporal-rois.csv"), findall(x -> get_lobe(x) == "temporal", cortex))
 
+# read in output from python files
 pypart = CSV.read(projectdir("output/analysis-derivatives/tau-derivatives/pypart.csv"), DataFrame)
 
 tau_params = CSV.read(datadir("adni-derivatives/tau-params.csv"), DataFrame)
@@ -39,110 +41,9 @@ part_vi = quantile.(partpath, .99)
 _part = deepcopy(v0)
 _part[Int.(pypart.region)] .= part_vi
 
-
 d = [_part[1:36]; _part[37:end]]
 part_increase = d .- v0
 part_sym_increase = (part_increase[1:36] .+ part_increase[37:end]) ./ 2
 sympart = v0 .+ [part_sym_increase; part_sym_increase]
 
 writedlm(projectdir("output/analysis-derivatives/tau-derivatives/pypart-sym.csv"), sympart)
-
-# Cutoffs 
-using GaussianMixtures, Distributions
-data = ADNIDataset(taudata, dktnames; qc=true)
-d = reduce(hcat, get_initial_conditions.(data))
-
-_ics = get_initial_conditions.(data)
-ics = _ics[findall(x -> x < 3, reduce(hcat, _ics)[4,:])]
-d = reduce(hcat, ics)
-ms = Vector{Float64}()
-stds = Vector{Float64}()
-ws = Vector{Float64}()
-ms2 = Vector{Float64}()
-stds2 = Vector{Float64}()
-ws2 = Vector{Float64}()
-gmms = Vector{GMM}()
-
-for i in 1:72
-    gmm = GMM(2, reshape(d[i, :], 1021, 1))
-    μ = means(gmm)
-    Σ = covars(gmm)
-    w = weights(gmm)
-    idx1 = argmin(μ)
-    idx2 = argmax(μ)
-    push!(gmms, gmm)
-    push!(ms, μ[idx1])
-    push!(stds, sqrt(Σ[idx1]))
-    push!(ws, weights(gmm)[idx1])
-    push!(ms2, μ[idx2])
-    push!(stds2, sqrt(Σ[idx2]))
-    push!(ws2, weights(gmm)[idx2])
-end
-
-# cutoffs = quantile.(Normal.(ms, stds), 0.75)
-mean(conc.(cutoffs, v0, vi))
-cutoffs = ms .+ 2 .* stds
-mean(conc.(cutoffs, v0, vi))
-writedlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-2std.csv"), cutoffs)
-cutoffs = ms .+ 1.5 .* stds
-mean(conc.(cutoffs, v0, vi))
-writedlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-1std.csv"), cutoffs)
-
-threshold = Vector{Float64}()
-xs = reshape(collect(1.:0.001:3.5), 2501, 1)
-for gmm in gmms
-    gmmp = gmmposterior(gmm, xs)
-    idx = argmin(abs.(gmmp[1][:,1] .- 0.5))
-    push!(threshold, xs[idx])
-end
-writedlm(projectdir("output/analysis-derivatives/tau-derivatives/tau-cutoffs-halfprob.csv"), threshold)
-
-include(projectdir("bf-data.jl"))
-
-data_path = datadir("bf-data/bf-data-ab-tau-summary.csv");
-data_df = CSV.read(data_path, DataFrame)
-data = BFDataset(data_df, dktnames; min_scans=1, tracer=:tau)
-
-ics = get_initial_conditions.(data)
-# ics = _ics[findall(x -> x < 3, reduce(hcat, _ics)[4,:])]
-d = reduce(hcat, ics)
-ms = Vector{Float64}()
-stds = Vector{Float64}()
-ws = Vector{Float64}()
-ms2 = Vector{Float64}()
-stds2 = Vector{Float64}()
-ws2 = Vector{Float64}()
-gmms = Vector{GMM}()
-
-for i in 1:72
-    gmm = GMM(2, reshape(d[i, :], 1598, 1))
-    μ = means(gmm)
-    Σ = covars(gmm)
-    w = weights(gmm)
-    idx1 = argmin(μ)
-    idx2 = argmax(μ)
-    push!(gmms, gmm)
-    push!(ms, μ[idx1])
-    push!(stds, sqrt(Σ[idx1]))
-    push!(ws, weights(gmm)[idx1])
-    push!(ms2, μ[idx2])
-    push!(stds2, sqrt(Σ[idx2]))
-    push!(ws2, weights(gmm)[idx2])
-end
-
-v0, vi, part = load_tau_params(tracer="RO")
-cutoffs = ms .+ 2 .* stds
-mean(conc.(cutoffs, v0, vi))
-writedlm(projectdir("output/analysis-derivatives/bf/tau-derivatives/tau-cutoffs-2std-bf.csv"), cutoffs)
-cutoffs = ms .+ 1.5 .* stds
-mean(conc.(cutoffs, v0, vi))
-writedlm(projectdir("output/analysis-derivatives/bf/tau-derivatives/tau-cutoffs-1std-bf.csv"), cutoffs)
-
-threshold = Vector{Float64}()
-xs = reshape(collect(1.:0.001:4.5), 3501, 1)
-for gmm in gmms
-    gmmp = gmmposterior(gmm, xs)
-    idx = argmin(abs.(gmmp[1][:,1] .- 0.5))
-    push!(threshold, xs[idx])
-end
-writedlm(projectdir("output/analysis-derivatives/bf/tau-derivatives/tau-cutoffs-halfprob-bf.csv"), threshold)

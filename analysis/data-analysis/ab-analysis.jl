@@ -36,8 +36,6 @@ CSV.write(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-binn
 
 f, rts = fit_second_order_polynomial(bin_df.ab_bin, bin_df.ab_bin_diffs)
 writedlm(projectdir("output/analysis-derivatives/ab-derivatives/$tracer/ab-polynomial-coeffs.csv"), coeffs(f))
-# f = 0.16844315367056056 + 0.4146967939561749*x - 0.2330383236437777*x^2 
-# roots = [0.627346338525677, 1.1521755335509531]
 
 #-----------------------------------------------------------------------
 # Ab integration
