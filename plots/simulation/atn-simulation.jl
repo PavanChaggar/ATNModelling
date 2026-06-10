@@ -139,6 +139,7 @@ begin
         colormap = cmap,
         colorrange = (-0.5, 5.5)   # centers colors on integer categories 0,1,2,3,4,5
     )
+    lines!(0.01:0.01:1.0, 0.01:0.01:1.0, linestyle=:dash, linewidth=3)
     Colorbar(
         fig[2, 1],
         hm,
@@ -159,7 +160,7 @@ begin
     )
     fig
 end
-save(projectdir("output/plots/simulation/braid-diagram.jpeg"), fig)
+save(projectdir("output/plots/simulation/braid-diagram.png"), fig)
 
 # --------------------------------------------------------------------------------
 # AB data
