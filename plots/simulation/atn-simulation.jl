@@ -25,15 +25,21 @@ subcortex = filter(x -> get_lobe(x) == "subcortex", get_parcellation())[collect(
 left_subcortex = filter(x -> get_hemisphere(x) == "left", subcortex)
 right_subcortex = filter(x -> get_hemisphere(x) == "right", subcortex)
 
+cortex = get_parcellation() |> get_cortex
+right_cortical_nodes = filter(x -> get_hemisphere(x) == "right", cortex)
+nodes = get_node_id.(right_cortical_nodes)
 
-α_a, ρ_t, α_t, β, η = 0.75, 0.02, 0.5, 3.21, 0.05
+bs = get_braak_regions()
+rois = [findall(x -> get_node_id(x) ∈ b , cortex) for b in bs]
+
+α_a, ρ_t, α_t, β, η = 0.75, 0.03, 0.5, 3.21, 0.05
 params = [α_a, ρ_t, α_t, β, η]
 
 ab_inits = copy(u0)
 tau_inits = copy(v0)
 atr_inits = zeros(72)
 
-ab_inits .+= 0.1 .* (ui .- u0)
+ab_inits .+= 0.25 .* (ui .- u0)
 
 tau_seed_regions = ["entorhinal" ]#,"Left-Amygdala", "Right-Amygdala", "Left-Hippocampus", "Right-Hippocampus"]
 tau_seed_idx = findall(x -> get_label(x) ∈ tau_seed_regions, c.parc)
@@ -53,64 +59,108 @@ sol_ts = simulate(func, inits, tspan, params; saveat=ts)
 using CairoMakie; CairoMakie.activate!()
 
 plot(sol, idxs=1:72)
-plot(sol, idxs=73:144)
-absol = ( Array(sol[1:72,:]) .- u0 ) ./ ( ui .- u0 ) 
+plot(sol, idxs=73:108)
+# absol = ( Array(sol[1:72,:]) .- u0 ) ./ ( ui .- u0 ) 
 
-tausol = ( Array(sols[1,end][73:144,:]) .- v0 ) ./ ( _vi .- v0 )
-tau_bs_sol = [vec(mean(tausol[roi,:], dims=1)) for roi in rois]
-sortperm([findfirst(x -> x > 0.1, tbs) for tbs in tau_bs_sol])
+# tausol = ( Array(sols[1,end][73:144,:]) .- v0 ) ./ ( _vi .- v0 )
+# tau_bs_sol = [vec(mean(tausol[roi,:], dims=1)) for roi in rois]
+# sortperm([findfirst(x -> x > 0.1, tbs) for tbs in tau_bs_sol])
 
-tau_seed = findall(x -> x >= 0.1, tausol)
-tau_seed_idx = zeros(72, size(sol,2))
-tau_seed_idx[tau_seed] .= 1.0
-# heatmap(tau_seed_idx)
+# tau_seed = findall(x -> x >= 0.1, tausol)
+# tau_seed_idx = zeros(72, size(sol,2))
+# tau_seed_idx[tau_seed] .= 1.0
+# # heatmap(tau_seed_idx)
 
-ab_seed = findall(x -> x >= 0.9, absol)
-ab_seed_idx = zeros(72, size(sol,2))
-ab_seed_idx[ab_seed] .= 1.0
-# heatmap(ab_seed_idx)
+# ab_seed = findall(x -> x >= 0.9, absol)
+# ab_seed_idx = zeros(72, size(sol,2))
+# ab_seed_idx[ab_seed] .= 1.0
+# # heatmap(ab_seed_idx)
 
-ab_tau_coloc = tau_seed_idx .* ab_seed_idx
-coloc_t = findfirst(x -> x > 0, sum(ab_tau_coloc, dims=1))
-coloc_node = findall(x -> x > 0, ab_tau_coloc[:, coloc_t[2]])
-# dktnames[coloc_node][1]
-sol.t[coloc_t[2]]
+# ab_tau_coloc = tau_seed_idx .* ab_seed_idx
+# coloc_t = findfirst(x -> x > 0, sum(ab_tau_coloc, dims=1))
+# coloc_node = findall(x -> x > 0, ab_tau_coloc[:, coloc_t[2]])
+# # dktnames[coloc_node][1]
+# sol.t[coloc_t[2]]
 
 # Braid diagram
-sols = [simulate(func, inits, tspan, [α_a, ρ_t, i, β, η]; saveat=0.1) for i in 0.05:0.01:1.0];
+# sols = [simulate(func, inits, tspan, [α_a, ρ_t, i, β, η]; saveat=0.1) for i in 0.05:0.01:1.0];
 
 sols = [
     simulate(func, inits, tspan, [α_a, ρ, i, β, η]; saveat=0.1)
-    for i in 0.05:0.01:1.0, ρ in 0.05:0.01:1.0
+    for i in 0.01:0.01:1.0, ρ in 0.01:0.01:1.0
 ];
 params = [
     i/ρ
-    for i in 0.05:0.01:1.0, ρ in 0.05:0.01:1.0
+    for i in 0.01:0.01:1.0, ρ in 0.01:0.01:1.0
 ]
-tausol = ( Array(sols[1,1][73:144,:]) .- v0 ) ./ ( _vi .- v0 )
-tau_bs_sol = reduce(hcat, [vec(mean(tausol[roi,:], dims=1)) for roi in rois])
-function get_braak_order(sol, v0=v0, vi=_vi)
-    tausol = ( Array(sol[73:144,:]) .- v0 ) ./ (_vi .- v0 )
+
+function get_braak_order(sol, v0=v0, vi=_vi, threshold=0.05)
+    tausol = ( Array(sol[73:144,:]) .- v0 ) ./ (vi .- v0 )
     tau_bs_sol = [vec(mean(tausol[roi,:], dims=1)) for roi in rois]
-    if !allequal([t[end] for t in tau_bs_sol] .> 0.01)
+    if !allequal([t[end] for t in tau_bs_sol] .> threshold)
          return 0
-    elseif allequal([t[end] for t in tau_bs_sol] .> 0.01) && tau_bs_sol[1][end] < 0.1
+    elseif allequal([t[end] for t in tau_bs_sol] .> threshold) && tau_bs_sol[1][end] < threshold
         return 0 
     else
-        return sortperm([findfirst(x -> x >= 0.01, tbs) for tbs in tau_bs_sol])
+        return sortperm([findfirst(x -> x >= threshold, tbs) for tbs in tau_bs_sol])
     end
 end
 braid_matrix = get_braak_order.(sols);
-findall(x -> x == [1, 2, 3, 4, 5], braid_matrix)
-heatmap(log.(params))
-heatmap(braid_matrix .== fill([1, 2, 3, 4, 5], 96, 96))
-d = Dict(unique(braid_matrix) .=> 0:1:4)
+heatmap(braid_matrix .== fill([1, 2, 3, 4, 5], 100,100))
+unique(braid_matrix)
+d = Dict(unique(braid_matrix) .=> [0, 5, 4, 3, 2, 1])
+# d = Dict(unique(braid_matrix) .=> [0, 3, 2, 1])
 function dmap(arr)
     return d[arr]
 end
 dmap.(braid_matrix)
 
-heatmap(dmap.(braid_matrix) ./ 4)
+begin
+
+    Z = 5 .- dmap.(braid_matrix)
+    xs = collect(0.01:0.01:1.0)
+    ys = collect(0.01:0.01:1.0)
+
+    # Discrete colormap with 6 colors
+    cmap = cgrad(reverse(ColorSchemes.rainbow), 6, categorical = true)
+
+    fig = Figure(size = (1500, 1000), fontsize=30)
+    ax = Axis(
+        fig[1, 1],
+        xlabel="tau production, γ", ylabel="tau transport, ρ",
+        xticks = 0.1:0.1:1.0,
+        yticks = 0.1:0.1:1.0,
+    )
+    hm = heatmap!(
+        ax,
+        xs,
+        ys,
+        Z;
+        colormap = cmap,
+        colorrange = (-0.5, 5.5)   # centers colors on integer categories 0,1,2,3,4,5
+    )
+    Colorbar(
+        fig[2, 1],
+        hm,
+        vertical=false, 
+        flipaxis = false,
+        label="Braak order",
+        ticks = (
+            reverse(0:5),
+            [
+                "subthreshold",
+                "1, 6, 2/3, 5, 4",
+                "1, 2/3, 6, 5, 4",
+                "1, 2/3, 6, 4, 5",
+                "1, 2/3, 4, 6, 5",
+                "1, 2/3, 4, 5, 6",
+            ]
+        )
+    )
+    fig
+end
+save(projectdir("output/plots/simulation/braid-diagram.jpeg"), fig)
+
 # --------------------------------------------------------------------------------
 # AB data
 # --------------------------------------------------------------------------------
@@ -132,13 +182,11 @@ heatmap(dmap.(braid_matrix) ./ 4)
 # --------------------------------------------------------------------------------
 # Simulation visualisatin
 # --------------------------------------------------------------------------------
+
 using GLMakie; GLMakie.activate!()
 using Colors, ColorSchemes
 
 _vi = part .+ (3.21 .* (ui .- u0))
-cortex = get_parcellation() |> get_cortex
-right_cortical_nodes = filter(x -> get_hemisphere(x) == "right", cortex)
-nodes = get_node_id.(right_cortical_nodes)
 
 ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
 tau_c = ColorScheme(sequential_palette(250, s = 0.9, c = 0.9, w =0.25, b = 0.5))
@@ -161,10 +209,6 @@ tracer_df = DataFrame(fbb_ui = fbb_ui .- fbb_u0,
                     ftp_vi = vi .- part, 
                     ro_vi = bf_vi - bf_part)
 
-fbb_ftp = lm(@formula(  ftp_vi ~ fbb_ui), tracer_df)
-fbp_ftp = lm(@formula(  ftp_vi ~ fbp_ui), tracer_df)
-fmm_ro  = lm(@formula(  ro_vi ~ fmm_ui), tracer_df)
-
 fbb_ftp = lm(@formula(ftp_vi ~ 0 + fbb_ui), tracer_df)
 fbp_ftp = lm(@formula(ftp_vi ~ 0 + fbp_ui), tracer_df)
 fmm_ro  = lm(@formula(ro_vi  ~ 0 + fmm_ui), tracer_df)
@@ -176,7 +220,6 @@ testdf = DataFrame(fbb_ui = LinRange(0.0, 1.5, 100),
 fbb_pred = predict(fbb_ftp, testdf, interval=:prediction, level=0.95)
 fbp_pred = predict(fbp_ftp, testdf, interval=:prediction, level=0.95)
 fmm_pred = predict(fmm_ro, testdf, interval=:prediction, level=0.95)
-
 # fbb_fitted_model = curve_fit(linearmodel, fbb_ui .- fbb_u0, vi .- part, [1.0]);
 # println(fbb_fitted_model.param)
 # println(rsquared(linearmodel(fbb_ui .- fbb_u0, fbb_fitted_model.param), vi .- part))
@@ -187,8 +230,6 @@ fmm_pred = predict(fmm_ro, testdf, interval=:prediction, level=0.95)
 # println(fbp_fitted_model.param)
 # println(rsquared(linearmodel(fmm_ui .- fmm_u0, bf_fitted_model.param), bf_vi .- bf_part))
 
-bs = get_braak_regions()
-rois = [findall(x -> get_node_id(x) ∈ b , cortex) for b in bs]
 
 begin
     GLMakie.activate!()
@@ -267,7 +308,7 @@ begin
     band!( ax, testdf.fbb_ui, disallowmissing(fbb_pred.lower),disallowmissing(fbb_pred.upper),   color = (cmap[1], 0.15))
     scatter!(fbb_ui .- fbb_u0, vi .- part, color=alphacolor(cmap[1], 0.5), markersize=15, label="FBB")
     # lines!(xs, linearmodel(xs, fbb_fitted_model.param), color=alphacolor(cmap[1], 0.5), linewidth=5)
-    CairoMakie.text!(ax, 0.2, 0.8, text= L"R^{2} = %$(round(rsquared(linearmodel(fbb_ui .- fbb_u0, fbb_fitted_model.param), vi .- part), sigdigits=2))", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=25)
+    CairoMakie.text!(ax, 0.2, 0.8, text= L"R^{2} = %$(round(rsquared(predict(fbb_ftp), response(fbb_ftp)), sigdigits=2))", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=25)
     lines!(ax,  testdf.fbb_ui, fbb_pred.prediction, color=(cmap[1], 0.8), linewidth=5)
     # axislegend(ax, position=:rb, fontsize=30)
     
@@ -279,7 +320,7 @@ begin
     band!( ax, testdf.fbp_ui, disallowmissing(fbp_pred.lower),disallowmissing(fbp_pred.upper),   color = (cmap[1], 0.15))
     scatter!(fbp_ui .- fbp_u0, vi .- part, color=alphacolor(cmap[1], 0.5), markersize=15, label="FBP")
     # lines!(xs, linearmodel(xs, fbp_fitted_model.param), color=alphacolor(cmap[2], 0.5), linewidth=5)
-    CairoMakie.text!(ax, 0.2, 0.8, text= L"R^{2} = %$(round(rsquared(linearmodel(fbp_ui .- fbp_u0, fbp_fitted_model.param), vi .- part), sigdigits=2))", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=25)
+    CairoMakie.text!(ax, 0.2, 0.8, text= L"R^{2} = %$(round(rsquared(predict(fbp_ftp), response(fbp_ftp)), sigdigits=2))", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=25)
     lines!(ax,  testdf.fbp_ui, fbp_pred.prediction, color=(cmap[1], 0.8), linewidth=5)
     # axislegend(ax, position=:rb, fontsize=30)
 
@@ -291,7 +332,7 @@ begin
     band!( ax, testdf.fmm_ui, disallowmissing(fmm_pred.lower),disallowmissing(fmm_pred.upper),   color = (cmap[1], 0.15))
     scatter!(fmm_ui .- fmm_u0, bf_vi .- bf_part, color=alphacolor(cmap[1], 0.5), markersize=15, label="FMM")
     # lines!(xs, linearmodel(xs, bf_fitted_model.param), color=alphacolor(cmap[1], 0.5), linewidth=5)
-    CairoMakie.text!(ax, 0.2, 0.8, text= L"R^{2} = %$(round(rsquared(linearmodel(fmm_ui .- fmm_u0, bf_fitted_model.param), bf_vi .- bf_part), sigdigits=2))", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=25)
+    CairoMakie.text!(ax, 0.2, 0.8, text= L"R^{2} = %$(round(rsquared(predict(fmm_ro), response(fmm_ro)), sigdigits=2))", align=(:left, :bottom), space=:relative, offset=(-40, 0), fontsize=25)
     lines!(ax,  testdf.fmm_ui, fmm_pred.prediction, color=(cmap[1], 0.8), linewidth=5)
     # axislegend(ax, position=:rb, fontsize=30)
 
@@ -419,9 +460,9 @@ begin
     Label(g3[1, 1, TopLeft()], "C", fontsize = 26, font = :bold, padding = (0, 0, 10, 0), halign = :left, tellheight=false, tellwidth=false)
     Label(g2[1, 1, TopLeft()], "D", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
     Label(g4[1, 1, TopLeft()], "E", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
-    
+    f
 end
-save(projectdir("output/plots/simulation/atn-simulation-all.jpeg"), f)
+save(projectdir("output/plots/simulation/atn-simulation-all-new-big.jpeg"), f, px_per_unit = 2)
 
 begin
     params = [α_a, ρ_t, α_t, 0, η]
@@ -547,4 +588,4 @@ begin
 
     # f
 end
-save(projectdir("output/plots/simulation/atn-simulation-no-interaction.jpeg"), f)
+save(projectdir("output/plots/simulation/atn-simulation-no-interaction-new.jpeg"), f, px_per_unit = 2)
