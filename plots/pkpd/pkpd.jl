@@ -204,7 +204,8 @@ for (i, t) in enumerate(int_ts)
     push!(drugsols, Array(_sol[109:144,:]))    
 end
 
-
+(mean(tausol[rois, end]) - mean(tausols[1][rois, end])) / mean(tausol[rois, end])
+(mean(atrsol[rois, end]) - mean(atrsols[1][rois, end])) / mean(atrsol[rois, end])
 # --------------------------------------------------------------------------------
 # Figure
 # --------------------------------------------------------------------------------
