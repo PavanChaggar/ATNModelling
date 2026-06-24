@@ -363,6 +363,7 @@ rois = findall(x -> x ∈ _rois, get_label.(cortex))
 braak_regions = get_braak_regions()
 bs = [findall(x -> get_node_id(x) ∈ br, cortex) for br in braak_regions]
 
+using GLMakie; GLMakie.activate!()
 begin
         cmap = Makie.wong_colors();
         ab_c = sequential_palette(125, s = 0.75, c = 0.9, w =0., b = 0.9);
@@ -632,6 +633,8 @@ begin
         Label(g0[3, 1, Top()], "B", fontsize = 40, font = :bold, padding = (50, 0, 0, -120), halign = :center, tellheight=false, tellwidth=false)
         Label(g0[3, 1, ], "ADNI", fontsize = 35, padding = (0, 0, 0, -110), halign = :center, tellheight=false, tellwidth=true, rotation=pi/2)
         Label(g0[4, 1, ], "BF2", fontsize = 35, padding = (0, 0, 0, -225), halign = :center, tellheight=false, tellwidth=true, rotation=pi/2)
-        f
+        
 end
-save(projectdir("output/plots/inference/pst-pstpred-harmonised-suvr-adni-bf-random-lognormal.png"),f)
+inch = 96
+save(projectdir("output/plots/inference/fig2-big.jpeg"),f, px_per_unit=300/inch)
+# save(projectdir("output/plots/inference/pst-pstpred-harmonised-suvr-adni-bf-random-lognormal.png"),f)

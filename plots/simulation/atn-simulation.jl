@@ -461,9 +461,10 @@ begin
     Label(g3[1, 1, TopLeft()], "C", fontsize = 26, font = :bold, padding = (0, 0, 10, 0), halign = :left, tellheight=false, tellwidth=false)
     Label(g2[1, 1, TopLeft()], "D", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :center, tellheight=false, tellwidth=false)
     Label(g4[1, 1, TopLeft()], "E", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
-    f
+    
 end
-save(projectdir("output/plots/simulation/atn-simulation-all-new-big.jpeg"), f, px_per_unit = 2)
+inch = 96
+save(projectdir("output/plots/simulation/fig1-big.jpeg"), f, px_per_unit = 300/inch)
 
 begin
     params = [α_a, ρ_t, α_t, 0, η]

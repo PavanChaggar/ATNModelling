@@ -304,9 +304,9 @@ begin
     Label(g3[1, 1, TopLeft()], "C", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
     Label(g4[1, 1, TopLeft()], "D", fontsize = 26, font = :bold, padding = (0, 0, 0, 0), halign = :left, tellheight=false, tellwidth=false)
     
-    
 end
-save(projectdir("output/plots/colocalisation/colocalisation-05-tau-thresholds-random-all.jpeg"), f)
+inch = 96
+save(projectdir("output/plots/colocalisation/fig3-big.jpeg"), f, px_per_unit=300/inch)
 
 
 using PrettyTables, CSV, DataFrames, DrWatson

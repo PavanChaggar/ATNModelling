@@ -491,4 +491,5 @@ begin
     Label(g3[2, 1, TopLeft()], "F", fontsize = 25, font = :bold, padding = (0, 60, 10, 0), halign = :center, tellheight=false, tellwidth=false)
     # f
 end
-save(projectdir("output/plots/pkpd/coloc-pkpd-70cl.jpeg"), f)
+inch = 96
+save(projectdir("output/plots/pkpd/fig4-big.jpeg"), f, px_per_unit = 300/inch)
