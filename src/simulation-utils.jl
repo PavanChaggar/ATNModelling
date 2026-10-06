@@ -241,7 +241,6 @@ end
 
 Confirm all ODE solutions are successful.  
 """
-
 function success_condition(retcodes)
     allequal(retcodes) && retcodes[1] == 1
 end
@@ -274,7 +273,6 @@ Returns a `DataFrame` containing the ordered list of regions in `parc` according
 The colocalisation order is determined by simulating a solution to `model` using posterior parameters from `pst` and initial conditions `inits`, 
 with a given `tau_threshold` and `ab_threshold`.
 """
-
 function calculate_colocalisation_order(parc::Parcellation, pst::Chains, model, inits, tau_threshold, ab_threshold; tracer)
     meanpst = mean(pst)
     params = meanpst[:Am_a, :mean], meanpst[:Pm_t, :mean], meanpst[:Am_t, :mean], meanpst[tracer, :mean], meanpst[:Em, :mean]
