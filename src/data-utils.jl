@@ -288,11 +288,9 @@ end
 
 """
     calc_times(ab::ADNISubject, tau::ADNISubject)
-    calc_times(ab::ADNIDataset, tau::ADNIDataset)
 
 Calculate the relative times of Aβ and tau PET scans, normalised to the first scan or either modality. 
 """
-
 function calc_times(ab::ADNISubject, tau::ADNISubject)
     ab_dates = get_dates(ab)
     tau_dates = get_dates(tau)
@@ -324,7 +322,7 @@ contains only subjects who have both Aβ PET and tau PET scans, including an ini
 3 months of each other. The `min_tau_scans` keyword can be used to ensure each subject 
 has a given number of longitudinal scans.
 """
-function align_data(ab_data::ADNIDataset, tau_data::ADNIDataset; min_tau_scans=3)
+function align_data(ab_data::ADNIDataset, tau_data::ADNIDataset; min_tau_scans=3, dt=0.3)
     pos_ids = get_id.(tau_data)
     ab_tau_pos = filter(x -> get_id(x) ∈ pos_ids, ab_data)
     ab_tau_pos_ids = get_id.(ab_tau_pos)
@@ -340,7 +338,7 @@ function align_data(ab_data::ADNIDataset, tau_data::ADNIDataset; min_tau_scans=3
     tau_idx = Vector{Int}()
     for (j, (at, tt)) in enumerate(zip(ab_times, tau_times))
         for i in eachindex(tt)
-            idx = findfirst(x -> abs(x - tt[i]) <= 0.3, at)
+            idx = findfirst(x -> abs(x - tt[i]) <= dt, at)
             if idx isa Nothing
                 continue
             else

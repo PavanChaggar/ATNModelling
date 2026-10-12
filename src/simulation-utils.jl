@@ -120,16 +120,6 @@ function make_scaled_atn_model(ui, part, L)
     return ODEFunction(atn)
 end
 
-"""
-   make_scaled_atn_pkpd_model(u0, ui, v0, part, L)
-
-Returns an `ODEFunction` correpsonding to the scaled ATN model on a single hemisphere coupled to a PKPD model. 
-This model has fixed parameters ``ui`, `part` and graph Laplacian `L` and distance graph Laplacian `Ld`. `m` is 
-a mask of regions in which drug enters the brain and `t0` is the initial dosing time.
-"""
-# function heaviside(t)
-#    0.5 * (sign(t) + 1)
-# end
 function heaviside(t)
    t > 0 ? 1 : 0
 end
